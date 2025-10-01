@@ -1,5 +1,21 @@
 import numpy as np
 
+def compute_loss(y, tx, w):
+    """Calculate the loss using either MSE or MAE.
+
+    Args:
+        y: shape=(N, )
+        tx: shape=(N,2)
+        w: shape=(2,). The vector of model parameters.
+
+    Returns:
+        the value of the loss (a scalar), corresponding to the input parameters w.
+    """
+
+    e = y - tx @ w
+    return (e.T @ e) / (2 * y.shape[0])
+
+
 def compute_gradient(y, tx, w, type="mse", stochastic=False):
     if stochastic:
         random_index = np.random.randint(y.shape[0])
@@ -71,7 +87,7 @@ def mean_squared_error_gd(y, tx, initial_w, max_iters, gamma, return_history=Fal
 
 
 def mean_squared_error_sgd(y, tx, initial_w, max_iters, gamma, return_history=False, verbose=False):
-    """The Stochastic Gradient Descent (SGD) algorithm with MSE loss.
+    """The *Stochastic* Gradient Descent (SGD) algorithm with MSE loss.
 
     Args:
         y: numpy array of shape=(N, )
@@ -87,3 +103,17 @@ def mean_squared_error_sgd(y, tx, initial_w, max_iters, gamma, return_history=Fa
     """
     gradient_function = lambda y, tx, w: compute_gradient(y, tx, w, type="mse", stochastic=True)
     return gradient_descent(y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose)
+
+def least_squares(y, tx):
+    """Calculate the least squares solution and returns optimal weights and MSE.
+
+    Args:
+        y: numpy array of shape (N,), N is the number of samples.
+        tx: numpy array of shape (N,D), D is the number of features.
+
+    Returns:
+        w: optimal weights, numpy array of shape(D,), D is the number of features.
+        mse: scalar.
+    """
+    w = np.linalg.solve(tx.T @ tx , tx.T @ y)
+    return w, compute_loss(y, tx, w) 
