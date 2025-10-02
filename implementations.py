@@ -117,3 +117,18 @@ def least_squares(y, tx):
     """
     w = np.linalg.solve(tx.T @ tx , tx.T @ y)
     return w, compute_loss(y, tx, w) 
+
+def ridge_regression(y, tx, lambda_):
+    """implement ridge regression.
+
+    Args:
+        y: numpy array of shape (N,), N is the number of samples.
+        tx: numpy array of shape (N,D), D is the number of features.
+        lambda_: scalar.
+
+    Returns:
+        w: optimal weights, numpy array of shape(D,), D is the number of features.
+    """
+    
+    w = np.linalg.solve(tx.T @ tx + lambda_ * (2 * tx.shape[1]) * np.eye(tx.shape[1]), tx.T @ y)
+    return w 
