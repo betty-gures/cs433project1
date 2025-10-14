@@ -105,7 +105,7 @@ def mean_squared_error_sgd(y, tx, initial_w, max_iters, gamma, return_history=Fa
     return gradient_descent(y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose)
 
 def least_squares(y, tx):
-    """Calculate the least squares solution and returns optimal weights and MSE.
+    """ Ordinary Least Squares: Calculate the least squares solution.
 
     Args:
         y: numpy array of shape (N,), N is the number of samples.
@@ -119,7 +119,7 @@ def least_squares(y, tx):
     return w, compute_loss(y, tx, w) 
 
 def ridge_regression(y, tx, lambda_):
-    """implement ridge regression.
+    """ Ridge regression: Linear least squares with L2 regularization.
 
     Args:
         y: numpy array of shape (N,), N is the number of samples.
@@ -134,3 +134,95 @@ def ridge_regression(y, tx, lambda_):
     diag_reg = 2 * lambda_ * tx.shape[0] * np.eye(tx.shape[1]) # 2 * N * lambda * I (DxD)
     w = np.linalg.solve(gram_matrix + diag_reg, tx.T @ y) # w = (X^T X + 2 N lambda I)^(-1) X^T y
     return w, compute_loss(y, tx, w)
+
+def sigmoid(t):
+    """apply sigmoid function on t (Numerically stable version using different formulas for positive and negative t)
+
+    Args:
+        t: scalar or numpy array
+
+    Returns:
+        scalar or numpy array
+    """
+    
+    t = np.asarray(t, dtype=np.float64)
+    out = np.empty_like(t)
+    pos = t >= 0
+    out[pos] = 1 / (1 + np.exp(-t[pos]))
+    exp_t = np.exp(t[~pos])
+    out[~pos] = exp_t / (1 + exp_t)
+    return out
+
+
+
+def logistic_regression(y, tx, initial_w, max_iters, gamma, stopping_threshold=1e-8):
+    """Logistic regression using gradient descent, assuming y in {0, 1}.
+
+    Args:
+        y: numpy array of shape (N,)
+        tx: numpy array of shape (N, D)
+        initial_w: numpy array of shape (D,)
+        max_iters: int
+        gamma: float
+
+    Returns:
+        w: numpy array of shape (D,)
+        loss: float
+    """
+    w = initial_w
+
+    pred = lambda tx, w: sigmoid(tx @ w) # shape=(N, 1)
+    loss = lambda y_pred: - np.mean((y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred)))
+
+    y_pred = pred(tx, w)
+    losses = [loss(y_pred)]
+
+    for _ in range(max_iters):
+        gradient = tx.T @ (y_pred - y) / y.shape[0]  # shape=(D,)
+        w_new = w - gamma * gradient # shape=(D,)
+        y_pred = pred(tx, w_new)  # shape=(N, 1)
+        loss_new = loss(y_pred)
+
+         # if the improvement is below the threshold, stop
+        if np.abs(losses[-1] - loss_new) < stopping_threshold:
+            break
+        losses.append(loss_new)
+        w = w_new
+
+    return w, losses[-1] 
+
+def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma, stopping_threshold=1e-8):
+    """L2 Regularized logistic regression using gradient descent, assuming y in {0, 1}.
+
+    Args:
+        y: numpy array of shape (N,)
+        tx: numpy array of shape (N, D)
+        lambda_: float
+        initial_w: numpy array of shape (D,)
+        max_iters: int
+        gamma: float
+    Returns:
+        w: numpy array of shape (D,)
+        loss: float
+    """
+    w = initial_w
+
+    pred = lambda tx, w: sigmoid(tx @ w) # shape=(N, 1)
+    loss = lambda y_pred, w, reg: - np.mean((y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred))) + (lambda_ * (w.T @ w) if reg else 0)
+
+    y_pred = pred(tx, w)
+    losses = [loss(y_pred, w, True)]
+
+    for _ in range(max_iters):
+        gradient = tx.T @ (y_pred - y) / y.shape[0] + 2 * lambda_ * w  # shape=(D,)
+        w_new = w - gamma * gradient # shape=(D,)
+        y_pred = pred(tx, w_new)  # shape=(N, 1)
+        loss_new = loss(y_pred, w_new, True)
+
+         # if the improvement is below the threshold, stop
+        if np.abs(losses[-1] - loss_new) < stopping_threshold:
+            break
+        losses.append(loss_new)
+        w = w_new
+
+    return w, loss(pred(tx, w), w, False)
