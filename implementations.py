@@ -35,9 +35,9 @@ def gradient_descent(
     """The Gradient Descent (GD) algorithm.
 
     Args:
-        y: numpy array of shape=(N, )
-        tx: numpy array of shape=(N,2)
-        initial_w: numpy array of shape=(2, ). The initial guess (or the initialization) for the model parameters
+        y: target, numpy array of shape=(N, )
+        tx: features, numpy array of shape=(N,2)
+        initial_w: weights to start with, numpy array of shape=(2, ). The initial guess (or the initialization) for the model parameters
         max_iters: a scalar denoting the total number of iterations of GD
         gamma: a scalar denoting the stepsize
 
@@ -51,8 +51,7 @@ def gradient_descent(
 
     for n_iter in range(max_iters):
         # compute gradient and loss
-        e = y - tx @ w  # error
-        loss = (e.T @ e) / (2 * y.shape[0])
+        loss = compute_loss(y, tx, w)
         losses.append(loss)
 
         gradient = gradient_function(y, tx, w)
@@ -70,8 +69,7 @@ def gradient_descent(
             )
 
     # if max_iters is 0, we still want to return the initial loss
-    e = y - tx @ w
-    loss = (e.T @ e) / (2 * y.shape[0])
+    loss = compute_loss(y, tx, w)
     return w, losses if return_history else loss
 
 
@@ -136,8 +134,9 @@ def least_squares(y, tx):
         w: optimal weights, numpy array of shape(D,), D is the number of features.
         mse: scalar.
     """
-    w = np.linalg.solve(tx.T @ tx, tx.T @ y)
-    return w, compute_loss(y, tx, w)
+    w = np.linalg.solve(tx.T @ tx, tx.T @ y) # w = (X^T X)^(-1) X^T y
+    loss = compute_loss(y, tx, w)
+    return w, loss
 
 
 def ridge_regression(y, tx, lambda_):
@@ -166,13 +165,13 @@ def sigmoid(t):
     """apply sigmoid function on t (Numerically stable version using different formulas for positive and negative t)
 
     Args:
-        t: scalar or numpy array
+        t: logits, scalar or numpy array
 
     Returns:
         scalar or numpy array
     """
 
-    t = np.asarray(t, dtype=np.float64)
+    t = np.asarray(t, dtype=np.float64) # convert to np array if needed
     out = np.empty_like(t)
     pos = t >= 0
     out[pos] = 1 / (1 + np.exp(-t[pos]))
