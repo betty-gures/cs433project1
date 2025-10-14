@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def compute_loss(y, tx, w):
     """Calculate the loss using either MSE or MAE.
 
@@ -20,13 +21,17 @@ def compute_gradient(y, tx, w, type="mse", stochastic=False):
     if stochastic:
         random_index = np.random.randint(y.shape[0])
         tx = tx[random_index, :].reshape(1, -1)
-        y = y[random_index].reshape(1, )
+        y = y[random_index].reshape(
+            1,
+        )
 
     e = y - tx @ w
-    return - 1/y.shape[0] * tx.T @ e
-    
+    return -1 / y.shape[0] * tx.T @ e
 
-def gradient_descent(y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose):
+
+def gradient_descent(
+    y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose
+):
     """The Gradient Descent (GD) algorithm.
 
     Args:
@@ -43,31 +48,36 @@ def gradient_descent(y, tx, initial_w, max_iters, gamma, gradient_function, retu
     """
     w = initial_w
     losses = []
-    
+
     for n_iter in range(max_iters):
         # compute gradient and loss
-        e = y - tx @ w # error
+        e = y - tx @ w  # error
         loss = (e.T @ e) / (2 * y.shape[0])
         losses.append(loss)
 
         gradient = gradient_function(y, tx, w)
-        if verbose: print("Gradient: ", gradient)
-        
+        if verbose:
+            print("Gradient: ", gradient)
+
         # update gradient
         w = w - gamma * gradient
 
-        if verbose: print(
-            "GD iter. {bi}/{ti}: loss={l}, w0={w0}, w1={w1}".format(
-                bi=n_iter, ti=max_iters - 1, l=loss, w0=w[0], w1=w[1]
+        if verbose:
+            print(
+                "GD iter. {bi}/{ti}: loss={l}, w0={w0}, w1={w1}".format(
+                    bi=n_iter, ti=max_iters - 1, l=loss, w0=w[0], w1=w[1]
+                )
             )
-        )
 
     # if max_iters is 0, we still want to return the initial loss
     e = y - tx @ w
     loss = (e.T @ e) / (2 * y.shape[0])
     return w, losses if return_history else loss
 
-def mean_squared_error_gd(y, tx, initial_w, max_iters, gamma, return_history=False, verbose=False):
+
+def mean_squared_error_gd(
+    y, tx, initial_w, max_iters, gamma, return_history=False, verbose=False
+):
     """The Gradient Descent (GD) algorithm with MSE loss.
 
     Args:
@@ -82,11 +92,17 @@ def mean_squared_error_gd(y, tx, initial_w, max_iters, gamma, return_history=Fal
         ws: a list of length max_iters + 1 containing the model parameters as numpy arrays of shape (2, ),
             for each iteration of GD (as well as the final weights)
     """
-    gradient_function = lambda y, tx, w: compute_gradient(y, tx, w, type="mse", stochastic=False)
-    return gradient_descent(y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose)
+    gradient_function = lambda y, tx, w: compute_gradient(
+        y, tx, w, type="mse", stochastic=False
+    )
+    return gradient_descent(
+        y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose
+    )
 
 
-def mean_squared_error_sgd(y, tx, initial_w, max_iters, gamma, return_history=False, verbose=False):
+def mean_squared_error_sgd(
+    y, tx, initial_w, max_iters, gamma, return_history=False, verbose=False
+):
     """The *Stochastic* Gradient Descent (SGD) algorithm with MSE loss.
 
     Args:
@@ -101,11 +117,16 @@ def mean_squared_error_sgd(y, tx, initial_w, max_iters, gamma, return_history=Fa
         ws: a list of length max_iters + 1 containing the model parameters as numpy arrays of shape (2, ),
             for each iteration of SGD (as well as the final weights)
     """
-    gradient_function = lambda y, tx, w: compute_gradient(y, tx, w, type="mse", stochastic=True)
-    return gradient_descent(y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose)
+    gradient_function = lambda y, tx, w: compute_gradient(
+        y, tx, w, type="mse", stochastic=True
+    )
+    return gradient_descent(
+        y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose
+    )
+
 
 def least_squares(y, tx):
-    """ Ordinary Least Squares: Calculate the least squares solution.
+    """Ordinary Least Squares: Calculate the least squares solution.
 
     Args:
         y: numpy array of shape (N,), N is the number of samples.
@@ -115,11 +136,12 @@ def least_squares(y, tx):
         w: optimal weights, numpy array of shape(D,), D is the number of features.
         mse: scalar.
     """
-    w = np.linalg.solve(tx.T @ tx , tx.T @ y)
-    return w, compute_loss(y, tx, w) 
+    w = np.linalg.solve(tx.T @ tx, tx.T @ y)
+    return w, compute_loss(y, tx, w)
+
 
 def ridge_regression(y, tx, lambda_):
-    """ Ridge regression: Linear least squares with L2 regularization.
+    """Ridge regression: Linear least squares with L2 regularization.
 
     Args:
         y: numpy array of shape (N,), N is the number of samples.
@@ -130,10 +152,15 @@ def ridge_regression(y, tx, lambda_):
         w: optimal weights, numpy array of shape(D,), D is the number of features.
         loss: scalar.
     """
-    gram_matrix = tx.T @ tx # X^T X (DxD)
-    diag_reg = 2 * lambda_ * tx.shape[0] * np.eye(tx.shape[1]) # 2 * N * lambda * I (DxD)
-    w = np.linalg.solve(gram_matrix + diag_reg, tx.T @ y) # w = (X^T X + 2 N lambda I)^(-1) X^T y
+    gram_matrix = tx.T @ tx  # X^T X (DxD)
+    diag_reg = (
+        2 * lambda_ * tx.shape[0] * np.eye(tx.shape[1])
+    )  # 2 * N * lambda * I (DxD)
+    w = np.linalg.solve(
+        gram_matrix + diag_reg, tx.T @ y
+    )  # w = (X^T X + 2 N lambda I)^(-1) X^T y
     return w, compute_loss(y, tx, w)
+
 
 def sigmoid(t):
     """apply sigmoid function on t (Numerically stable version using different formulas for positive and negative t)
@@ -144,7 +171,7 @@ def sigmoid(t):
     Returns:
         scalar or numpy array
     """
-    
+
     t = np.asarray(t, dtype=np.float64)
     out = np.empty_like(t)
     pos = t >= 0
@@ -152,7 +179,6 @@ def sigmoid(t):
     exp_t = np.exp(t[~pos])
     out[~pos] = exp_t / (1 + exp_t)
     return out
-
 
 
 def logistic_regression(y, tx, initial_w, max_iters, gamma, stopping_threshold=1e-8):
@@ -171,27 +197,30 @@ def logistic_regression(y, tx, initial_w, max_iters, gamma, stopping_threshold=1
     """
     w = initial_w
 
-    pred = lambda tx, w: sigmoid(tx @ w) # shape=(N, 1)
-    loss = lambda y_pred: - np.mean((y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred)))
+    pred = lambda tx, w: sigmoid(tx @ w)  # shape=(N, 1)
+    loss = lambda y_pred: -np.mean((y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred)))
 
     y_pred = pred(tx, w)
     losses = [loss(y_pred)]
 
     for _ in range(max_iters):
         gradient = tx.T @ (y_pred - y) / y.shape[0]  # shape=(D,)
-        w_new = w - gamma * gradient # shape=(D,)
+        w_new = w - gamma * gradient  # shape=(D,)
         y_pred = pred(tx, w_new)  # shape=(N, 1)
         loss_new = loss(y_pred)
 
-         # if the improvement is below the threshold, stop
+        # if the improvement is below the threshold, stop
         if np.abs(losses[-1] - loss_new) < stopping_threshold:
             break
         losses.append(loss_new)
         w = w_new
 
-    return w, losses[-1] 
+    return w, losses[-1]
 
-def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma, stopping_threshold=1e-8):
+
+def reg_logistic_regression(
+    y, tx, lambda_, initial_w, max_iters, gamma, stopping_threshold=1e-8
+):
     """L2 Regularized logistic regression using gradient descent, assuming y in {0, 1}.
 
     Args:
@@ -207,19 +236,21 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma, stoppin
     """
     w = initial_w
 
-    pred = lambda tx, w: sigmoid(tx @ w) # shape=(N, 1)
-    loss = lambda y_pred, w, reg: - np.mean((y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred))) + (lambda_ * (w.T @ w) if reg else 0)
+    pred = lambda tx, w: sigmoid(tx @ w)  # shape=(N, 1)
+    loss = lambda y_pred, w, reg: -np.mean(
+        (y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred))
+    ) + (lambda_ * (w.T @ w) if reg else 0)
 
     y_pred = pred(tx, w)
     losses = [loss(y_pred, w, True)]
 
     for _ in range(max_iters):
         gradient = tx.T @ (y_pred - y) / y.shape[0] + 2 * lambda_ * w  # shape=(D,)
-        w_new = w - gamma * gradient # shape=(D,)
+        w_new = w - gamma * gradient  # shape=(D,)
         y_pred = pred(tx, w_new)  # shape=(N, 1)
         loss_new = loss(y_pred, w_new, True)
 
-         # if the improvement is below the threshold, stop
+        # if the improvement is below the threshold, stop
         if np.abs(losses[-1] - loss_new) < stopping_threshold:
             break
         losses.append(loss_new)
