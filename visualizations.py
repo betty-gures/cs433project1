@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 def plot_roc(score, y, steps=21):
     thresholds = np.linspace(0, 1, steps)
@@ -39,3 +40,25 @@ def plot_losses(train_losses, val_losses):
     plt.ylabel("Loss")
     plt.legend()
     plt.show()
+
+def plot_class_distribution_by_group(y, group_attr):
+    mask = ~np.isnan(group_attr)
+    group_clean = group_attr[mask]
+    y_clean = y[mask]
+    g = sns.histplot(x=group_clean, hue=y_clean, multiple="stack", stat="probability")
+
+    totals = np.array([bar.get_height() for container in g.containers for bar in container if bar.get_height() > 0]).reshape(2, -1).sum(axis=0)
+    for container in g.containers:
+        i = 0
+        for bar in container:
+            height = bar.get_height()
+            if height > 0:
+                g.annotate(
+                    f'{height*100/totals[i]:.1f}%',  # relative frequency
+                    xy=(bar.get_x() + bar.get_width()/2, bar.get_y() + height/2),
+                    ha='left',
+                    va='center',
+                    color='black',
+                    fontsize=9
+                )
+                i+=1

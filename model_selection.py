@@ -11,7 +11,32 @@ class CVResult:
     auc_rocs: List[float]
     train_result: Any
 
-def cross_validation(model_class, x_train, y_train, num_folds=5, seed=42, verbose=False, **model_args):
+def score_by_group(y_true, pred, probs, group_attr):
+    f1_scores, f2_scores, auc_rocs = {}, {}, {}
+    
+    for attr_val in np.unique(group_attr):
+        mask = group_attr == attr_val if not np.isnan(attr_val) else np.isnan(group_attr)
+        group_name = str(attr_val) if not np.isnan(attr_val) else "nan"
+        f1_scores[group_name] = f_score(pred[mask], y_true[mask])
+        f2_scores[group_name] = f_score(pred[mask], y_true[mask], beta=2)
+        auc_rocs[group_name] = auc_roc(probs[mask], y_true[mask])
+    return f1_scores, f2_scores, auc_rocs
+
+def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbose=False, scoring_groups=None, **model_args):
+    """Perform k-fold cross-validation.
+    
+    Args:
+        x_train: shape=(N, D)
+        y_train: shape=(N, 1)
+        model_class: class of the model to be trained, must implement 'train' and '
+        num_folds: number of folds for cross-validation
+        seed: random seed for shuffling data
+        verbose: whether to print progress messages
+        **model_args: additional arguments to pass to the model constructor
+    
+    Returns:
+        CVResult: dataclass containing lists of f1 scores, f2 scores, auc-rocs, and training results for each fold
+    """
     num_samples_total = x_train.shape[0]
     indices = np.arange(num_samples_total)
 
@@ -30,11 +55,18 @@ def cross_validation(model_class, x_train, y_train, num_folds=5, seed=42, verbos
         model = model_class(**model_args) # initialize a new model for each fold
         train_results.append(model.train(x_train[train_idx], y_train[train_idx], verbose=verbose, metric=f_score)) # train the model
         y_val_pred = model.predict(x_train[val_idx]) # predict on validation set
+        y_probs = model.predict(x_train[val_idx], probability=True)
 
         y_val = y_train[val_idx]
-        f1_scores.append(f_score(y_val_pred, y_val))
-        f2_scores.append(f_score(y_val_pred, y_val, beta=2))
-        aucrocs.append(auc_roc(model.predict(x_train[val_idx], probability=True), y_val))
+        if scoring_groups is None:
+            f1_scores.append(f_score(y_val_pred, y_val))
+            f2_scores.append(f_score(y_val_pred, y_val, beta=2))
+            aucrocs.append(auc_roc(y_probs, y_val))
+        else:
+            f1_dict, f2_dict, aucroc_dict = score_by_group(y_val, y_val_pred, y_probs, scoring_groups[val_idx])
+            f1_scores.append(f1_dict)
+            f2_scores.append(f2_dict)
+            aucrocs.append(aucroc_dict)
 
         current += fold_size
     return CVResult(f1_scores, f2_scores, aucrocs, train_results)

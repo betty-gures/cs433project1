@@ -65,7 +65,7 @@ class LogisticRegression():
         assert gradient.shape == w.shape
         return gradient
 
-    def train(self, X_train, y_train, val_ratio=0.2, verbose=False, metric=None):
+    def train(self, X_train, y_train, val_ratio=0.2, verbose=False, metric=None, NUM_THRESHOLDS=100):
         """Train the model using gradient descent
     
         Args:
@@ -120,7 +120,7 @@ class LogisticRegression():
             print(f"val loss={binary_cross_entropy_loss(y_val, X_val, self.weights)}")
 
         # find optimal threshold on validation set
-        thresholds = np.linspace(0, 1, 21)
+        thresholds = np.linspace(0, 1, NUM_THRESHOLDS)
         scores = []
         y_score = self.predict(X_val, probability=True)
         if metric is not None:
