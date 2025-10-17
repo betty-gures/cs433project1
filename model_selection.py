@@ -23,9 +23,9 @@ def cross_validation(model_class, x_train, y_train, num_folds=5, seed=42, verbos
     f1_scores, f2_scores, aucrocs, train_results = [], [], [], []
 
     for fold_idx, fold_size in enumerate(fold_sizes):
-        print(f"Starting fold {fold_idx + 1}/{num_folds} with {fold_size} samples")
         val_idx = indices[current:current + fold_size]
         train_idx = np.concatenate([indices[:current], indices[current + fold_size:]])
+        print(f"Starting fold {fold_idx + 1}/{num_folds} with {train_idx.shape[0]} samples")
  
         model = model_class(**model_args) # initialize a new model for each fold
         train_results.append(model.train(x_train[train_idx], y_train[train_idx], verbose=verbose, metric=f_score)) # train the model
