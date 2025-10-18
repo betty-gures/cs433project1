@@ -11,7 +11,56 @@ class CVResult:
     auc_rocs: List[float]
     train_result: Any
 
+
+def find_best_threshold(scores, true, metric, num_thresholds=200, verbose=False):
+    """Find the best decision threshold for binary classification based on a given metric.
+    Args:
+        scores: np.ndarray of shape (N,), predicted probabilities or scores
+        true: np.ndarray of shape (N,), true binary labels (0 or 1)
+        metric: function(pred, true) -> float, metric to optimize
+        num_thresholds: int, number of thresholds to evaluate
+        """
+    thresholds = np.linspace(0, 1, num_thresholds)
+    metric_vals = [] # collects the metric values for each threshold
+    
+    for t in thresholds:
+        pred = (scores >= t).astype(int)
+        metric_vals.append(metric(pred, true))
+    best_threshold = thresholds[np.argmax(metric_vals)]
+    if verbose: print(f"Best threshold: {best_threshold} with score {np.max(metric_vals)}")
+    return best_threshold
+
+def test_val_split(rng, X, y, val_ratio=0.2):
+    """Split the data into training and validation sets.
+     Args:
+        rng: np.random.Generator
+        X: np.ndarray of shape (N, D)
+        y: np.ndarray of shape (N, )
+        val_ratio: float, ratio of validation data
+    
+    Returns:
+        X_train, y_train, X_val, y_val
+    """
+    num_val = int(X.shape[0] * val_ratio)
+    indices = rng.permutation(X.shape[0])
+    val_idx = indices[:num_val]
+    train_idx = indices[num_val:]
+    X_val, y_val = X[val_idx], y[val_idx]
+    X_train, y_train = X[train_idx], y[train_idx]
+    return X_train, y_train, X_val, y_val
+
 def score_by_group(y_true, pred, probs, group_attr):
+    """Compute metrics grouped by a specific attribute. 
+    Args:
+        y_true: np.ndarray of shape (N,), true binary labels (0 or 1
+        pred: np.ndarray of shape (N,), predicted binary labels (0 or 1)
+        probs: np.ndarray of shape (N,), predicted probabilities
+        group_attr: np.ndarray of shape (N,), attribute to group by (can contain NaN values)
+    Returns:
+        f1_scores: dict mapping group value to F1 score
+        f2_scores: dict mapping group value to F2 score
+        auc_rocs: dict mapping group value to AUROC
+    """
     f1_scores, f2_scores, auc_rocs = {}, {}, {}
     
     for attr_val in np.unique(group_attr):
@@ -53,9 +102,9 @@ def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbos
         print(f"Starting fold {fold_idx + 1}/{num_folds} with {train_idx.shape[0]} samples")
  
         model = model_class(**model_args) # initialize a new model for each fold
-        train_results.append(model.train(x_train[train_idx], y_train[train_idx], verbose=verbose, metric=f_score)) # train the model
+        train_results.append(model.train(x_train[train_idx], y_train[train_idx], verbose=verbose)) # train the model
         y_val_pred = model.predict(x_train[val_idx]) # predict on validation set
-        y_probs = model.predict(x_train[val_idx], probability=True)
+        y_probs = model.predict(x_train[val_idx], scores=True)
 
         y_val = y_train[val_idx]
         if scoring_groups is None:

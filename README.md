@@ -14,4 +14,4 @@ notebooks
     These are messy development spaces, after which we move the code out into files for reuse
 
 models.py
-    Made of classes that represent the different methods.
+    Made of classes that represent the different models.

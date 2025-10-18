@@ -2,12 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def plot_roc(score, y, steps=21):
+def plot_roc(score, y, steps=101):
     thresholds = np.linspace(0, 1, steps)
     tpr = []
     fpr = []
     
-
     for thresh in thresholds:
         y_pred = (score >= thresh).astype(int)
         TP = np.sum((y_pred == 1) & (y == 1))
