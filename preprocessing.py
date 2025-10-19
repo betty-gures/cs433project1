@@ -7,9 +7,7 @@ sys.path.append("../")
 import helpers
 
 base_dir = Path(__file__).parent
-
-print("Loading raw data...")
-x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = helpers.load_csv_data(base_dir / "data/dataset", sub_sample=False)
+x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = None, None, None, None, None
 
 # load and parse missing values
 missing_values = []
@@ -19,8 +17,6 @@ with open(base_dir / "data/missing_values.txt", "r") as f:
         # split by comma and convert to int
         numbers = [int(x.strip()) for x in line.split(",") if x.strip() != ""]
         missing_values.append(numbers)
-
-assert x_train_orig.shape[1] == len(missing_values), "Mismatch between features and missing values"
 
 # load variable types
 variable_type = []
@@ -34,13 +30,15 @@ with open(base_dir / "data/variable_type.txt", "r") as f:
             variable_type.append(line)
 
 
-def impute_missing_values(x):
-    col_means = np.nanmean(x, axis=0)
-    inds = np.where(np.isnan(x))
-    x[inds] = np.take(col_means, inds[1])
-    return x
+def lazy_load_data():
+    print("Loading raw data...")
+    global x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids
+    if x_train_orig is None:
+        x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = helpers.load_csv_data(base_dir / "data/dataset", sub_sample=False)
+        assert x_train_orig.shape[1] == len(missing_values), "Mismatch between features and missing values"
 
-def preprocess(replace_nan_codes=True, one_hot_encoding=True, remove_invariant=True, save_dir=None, MAX_ONE_HOT_CATEGORIES=100):
+def preprocess(replace_nan_codes=True, one_hot_encoding=True, save_dir=None, MAX_ONE_HOT_CATEGORIES=100):
+    lazy_load_data()
     x_train = x_train_orig.copy()
     x_test = x_test_orig.copy()
     y_train = y_train_orig.copy()
@@ -67,29 +65,25 @@ def preprocess(replace_nan_codes=True, one_hot_encoding=True, remove_invariant=T
         x_train = np.delete(x_train, one_hot_encoded, axis=1)
         x_test = np.delete(x_test, one_hot_encoded, axis=1)
 
-    print("Imputing missing values...")
-    x_train = impute_missing_values(x_train)
-    x_test = impute_missing_values(x_test)
-
-    if remove_invariant:
-        print("Removing invariant features...")
-        stds_train = np.std(x_train, axis=0) # invariant features have zero std
-        stds_test = np.std(x_test, axis=0) # invariant features have zero std
-        x_train = x_train[:, (stds_train > 0) & (stds_test > 0)] # combine invariance from train and test
-        x_test = x_test[:, (stds_train > 0) & (stds_test > 0)]
-
-
     # convert target to 0/1
     y_train = ((y_train + 1) / 2).astype(int)
 
     if save_dir is not None:
         print(f"Saving preprocessed data to {save_dir}...")
-        np.savez("../data/dataset_prep/train.npz", x_train=x_train, y_train=y_train)
-        np.savez("../data/dataset_prep/test.npz", x_test=x_test, test_ids=test_ids)
-    
+        np.savez(f"{save_dir}/train.npz", x_train=x_train, y_train=y_train)
+        np.savez(f"{save_dir}/test.npz", x_test=x_test, test_ids=test_ids)
+
     return x_train, x_test, y_train, test_ids
 
-def normalize_and_bias_data(x_train, x_test):
+
+def impute_missing_values(train, test):
+    col_means = np.nanmean(train, axis=0)
+    inds = np.where(np.isnan(test))
+    test[inds] = np.take(col_means, inds[1])
+    return test
+
+
+def normalize_and_bias_data(x_train, x_test=None):
     """Standardize data and add bias term.
     Args:
         x_train: np.ndarray of shape (N_train, D)
@@ -97,17 +91,32 @@ def normalize_and_bias_data(x_train, x_test):
     Returns:
         x_train_std: np.ndarray of shape (N_train, D+1)
         x_test_std: np.ndarray of shape (N_test, D+1)
-    """
+    """ 
+    # missing data imputation
+    x_train = impute_missing_values(x_train, x_train)
+    if x_test is not None: x_test = impute_missing_values(x_train, x_test)
+    
+    # invariant feature removal
+    stds_train = np.std(x_train, axis=0)
+    x_train = x_train[:, (stds_train > 0)]
 
     # feature scaling by standardization
     mean = x_train.mean(axis=0)
     std = x_train.std(axis=0)
+    assert not np.any(std == 0), "At least one feature has zero standard deviation."
     x_train = (x_train - mean) / std
-    x_test = (x_test - x_test.mean(axis=0)) / x_test.std(axis=0)
-
+    
     # add bias term
-    x_train = np.c_[np.ones((y_train.shape[0], 1)), x_train] 
+    x_train = np.c_[np.ones((x_train.shape[0], 1)), x_train] 
+
+    if x_test is None:
+        return x_train
+    
+    
+    x_test = x_test[:, (stds_train > 0)]
+    x_test = (x_test - mean) / std
     x_test = np.c_[np.ones((x_test.shape[0], 1)), x_test]
+    return x_train, x_test
 
 def get_raw_data():
     return x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids

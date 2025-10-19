@@ -102,7 +102,8 @@ def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbos
         print(f"Starting fold {fold_idx + 1}/{num_folds} with {train_idx.shape[0]} samples")
  
         model = model_class(**model_args) # initialize a new model for each fold
-        train_results.append(model.train(x_train[train_idx], y_train[train_idx], verbose=verbose)) # train the model
+        model.hyperparameter_tuning(x_train[train_idx], y_train[train_idx], f_score, verbose=verbose)
+        model.train(x_train[train_idx], y_train[train_idx]) # train the model
         y_val_pred = model.predict(x_train[val_idx]) # predict on validation set
         y_probs = model.predict(x_train[val_idx], scores=True)
 

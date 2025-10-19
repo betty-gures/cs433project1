@@ -3,7 +3,6 @@ import os
 import numpy as np
 
 from helpers import create_csv_submission
-from metrics import f_score
 from models import LogisticRegression
 from preprocessing import preprocess
 
@@ -12,7 +11,8 @@ x_train, x_test, y_train, test_ids = preprocess()
 
 # Initialize and train the model
 print("Training model...")
-model = LogisticRegression(metric=f_score)
+model = LogisticRegression()
+model.hyperparameter_tuning(x_train, y_train, verbose=False)
 model.train(X=x_train, y=y_train)
 
 # Make predictions on the test set
