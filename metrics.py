@@ -1,10 +1,12 @@
 import numpy as np
 
 def f_score(pred, true, beta=1):
-    """
-    Compute Fbeta score
+    """ Compute Fbeta score
 
     Args:
+        pred: Predicted labels (0 or 1)
+        true: True labels (0 or 1)
+        beta: Weighting factor for precision and recall
 
     """
     assert np.all((pred == 0) | (pred == 1)) and np.all((true == 0) | (true == 1)), "pred and y must be binary (0 or 1)"
@@ -16,18 +18,14 @@ def f_score(pred, true, beta=1):
     return (1 + beta**2) * (precision * recall) / (beta**2 * precision + recall) if (beta**2 * precision + recall) > 0 else 0
 
 def auc_roc(y_score, true):
-    """
-    Compute AUROC
+    """ Compute AUROC
     
     Args:
-    y_score : np.ndarray
-        Predicted probabilities.
-    true : np.ndarray
-        Binary ground truth labels (0 or 1).
+        y_score : Predicted probabilities., np.ndarray
+        true : Binary ground truth labels (0 or 1), np.ndarray
 
     Returns:
-    float
-        Area under the ROC curve.
+        float, Area under the ROC curve.
     """
     # Sort by predicted scores descending
     desc_sort_indices = np.argsort(-y_score)

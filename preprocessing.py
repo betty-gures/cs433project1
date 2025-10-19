@@ -1,15 +1,19 @@
+from pathlib import Path
 import sys
 
 import numpy as np
 
 sys.path.append("../")
 import helpers
+
+base_dir = Path(__file__).parent
+
 print("Loading raw data...")
-x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = helpers.load_csv_data("../data/dataset", sub_sample=False)
+x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = helpers.load_csv_data(base_dir / "data/dataset", sub_sample=False)
 
 # load and parse missing values
 missing_values = []
-with open("../data/missing_values.txt", "r") as f:
+with open(base_dir / "data/missing_values.txt", "r") as f:
     for line in f:
         line = line.strip().strip('"')  # remove whitespace and surrounding quotes
         # split by comma and convert to int
@@ -20,7 +24,7 @@ assert x_train_orig.shape[1] == len(missing_values), "Mismatch between features 
 
 # load variable types
 variable_type = []
-with open("../data/variable_type.txt", "r") as f:
+with open(base_dir / "data/variable_type.txt", "r") as f:
     for line in f:
         line = line.strip().strip('"')  # remove whitespace and surrounding quotes
         # split by comma and convert to int
@@ -36,7 +40,7 @@ def impute_missing_values(x):
     x[inds] = np.take(col_means, inds[1])
     return x
 
-def preprocess(replace_nan_codes=True, one_hot_encoding=True, remove_invariant=True, save_dir=None, MAX_ONE_HOT_CATEGORIES=50):
+def preprocess(replace_nan_codes=True, one_hot_encoding=True, remove_invariant=True, save_dir=None, MAX_ONE_HOT_CATEGORIES=100):
     x_train = x_train_orig.copy()
     x_test = x_test_orig.copy()
     y_train = y_train_orig.copy()
@@ -60,6 +64,8 @@ def preprocess(replace_nan_codes=True, one_hot_encoding=True, remove_invariant=T
                 x_train = np.column_stack([x_train, *train_cols])
                 x_test = np.column_stack([x_test, *test_cols])
                 one_hot_encoded.append(idx)
+        x_train = np.delete(x_train, one_hot_encoded, axis=1)
+        x_test = np.delete(x_test, one_hot_encoded, axis=1)
 
     print("Imputing missing values...")
     x_train = impute_missing_values(x_train)
@@ -72,13 +78,6 @@ def preprocess(replace_nan_codes=True, one_hot_encoding=True, remove_invariant=T
         x_train = x_train[:, (stds_train > 0) & (stds_test > 0)] # combine invariance from train and test
         x_test = x_test[:, (stds_train > 0) & (stds_test > 0)]
 
-    # feature scaling by standardization
-    x_train = (x_train - x_train.mean(axis=0)) / x_train.std(axis=0)
-    x_test = (x_test - x_train.mean(axis=0)) / x_train.std(axis=0)
-
-    # add bias term
-    x_train = np.c_[np.ones((y_train.shape[0], 1)), x_train] 
-    x_test = np.c_[np.ones((x_test.shape[0], 1)), x_test]
 
     # convert target to 0/1
     y_train = ((y_train + 1) / 2).astype(int)
@@ -88,7 +87,27 @@ def preprocess(replace_nan_codes=True, one_hot_encoding=True, remove_invariant=T
         np.savez("../data/dataset_prep/train.npz", x_train=x_train, y_train=y_train)
         np.savez("../data/dataset_prep/test.npz", x_test=x_test, test_ids=test_ids)
     
-    return x_train, x_test, y_train
+    return x_train, x_test, y_train, test_ids
+
+def normalize_and_bias_data(x_train, x_test):
+    """Standardize data and add bias term.
+    Args:
+        x_train: np.ndarray of shape (N_train, D)
+        x_test: np.ndarray of shape (N_test, D)
+    Returns:
+        x_train_std: np.ndarray of shape (N_train, D+1)
+        x_test_std: np.ndarray of shape (N_test, D+1)
+    """
+
+    # feature scaling by standardization
+    mean = x_train.mean(axis=0)
+    std = x_train.std(axis=0)
+    x_train = (x_train - mean) / std
+    x_test = (x_test - x_test.mean(axis=0)) / x_test.std(axis=0)
+
+    # add bias term
+    x_train = np.c_[np.ones((y_train.shape[0], 1)), x_train] 
+    x_test = np.c_[np.ones((x_test.shape[0], 1)), x_test]
 
 def get_raw_data():
     return x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids

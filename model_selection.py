@@ -12,7 +12,7 @@ class CVResult:
     train_result: Any
 
 
-def find_best_threshold(scores, true, metric, num_thresholds=200, verbose=False):
+def find_best_threshold(scores, true, metric, num_thresholds=201, verbose=False):
     """Find the best decision threshold for binary classification based on a given metric.
     Args:
         scores: np.ndarray of shape (N,), predicted probabilities or scores
