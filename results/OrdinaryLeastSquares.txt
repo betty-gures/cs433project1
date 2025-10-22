@@ -1,0 +1,9 @@
+Model: OrdinaryLeastSquares
+
+cv_results repr:
+CVResult(f1_scores=[np.float64(0.4146238377007608), np.float64(0.42252931323283077), np.float64(0.42353951890034364), np.float64(0.4221018418201517), np.float64(0.4227607096495024)], f2_scores=[np.float64(0.49645748987854255), np.float64(0.49945549945549944), np.float64(0.497979797979798), np.float64(0.4892014063284782), np.float64(0.4905110954915153)], auc_rocs=[np.float64(0.854304513760869), np.float64(0.8560144052242122), np.float64(0.8594861363740083), np.float64(0.8605258143292345), np.float64(0.8543030129822902)], train_result=[])
+
+Aggregated metrics:
+Average F1-score: 42.1% ± 0.3
+Average F2-score: 49.5% ± 0.4
+Average AUC-ROC: 85.7% ± 0.3

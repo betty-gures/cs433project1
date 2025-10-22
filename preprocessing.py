@@ -1,5 +1,7 @@
+import os
 from pathlib import Path
 import sys
+import zipfile
 
 import numpy as np
 
@@ -7,6 +9,7 @@ sys.path.append("../")
 import helpers
 
 base_dir = Path(__file__).parent
+dataset_dir = base_dir / "data/dataset"
 x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = None, None, None, None, None
 
 # load and parse missing values
@@ -32,9 +35,12 @@ with open(base_dir / "data/variable_type.txt", "r") as f:
 
 def lazy_load_data():
     print("Loading raw data...")
+    if not os.path.exists(dataset_dir):
+        with zipfile.ZipFile(base_dir / "data/dataset.zip", 'r') as zip_ref:
+            zip_ref.extractall(base_dir / "data")
     global x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids
     if x_train_orig is None:
-        x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = helpers.load_csv_data(base_dir / "data/dataset", sub_sample=False)
+        x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = helpers.load_csv_data(dataset_dir, sub_sample=False)
         assert x_train_orig.shape[1] == len(missing_values), "Mismatch between features and missing values"
 
 def preprocess(replace_nan_codes=True, one_hot_encoding=True, save_dir=None, MAX_ONE_HOT_CATEGORIES=100):
@@ -70,6 +76,7 @@ def preprocess(replace_nan_codes=True, one_hot_encoding=True, save_dir=None, MAX
 
     if save_dir is not None:
         print(f"Saving preprocessed data to {save_dir}...")
+        os.makedirs(save_dir, exist_ok=True)
         np.savez(f"{save_dir}/train.npz", x_train=x_train, y_train=y_train)
         np.savez(f"{save_dir}/test.npz", x_test=x_test, test_ids=test_ids)
 
@@ -117,6 +124,26 @@ def normalize_and_bias_data(x_train, x_test=None):
     x_test = (x_test - mean) / std
     x_test = np.c_[np.ones((x_test.shape[0], 1)), x_test]
     return x_train, x_test
+
+def pca(x_train, variance_threshold=0.2):
+    X_centered = x_train - np.mean(x_train, axis=0)
+    cov_matrix = np.cov(X_centered, rowvar=False)  # shape (n_features, n_features)
+    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+    idx = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[idx]
+    eigenvectors = eigenvectors[:, idx]
+
+    explained_variance_ratio = eigenvalues / np.sum(eigenvalues)
+    cumulative_variance = np.cumsum(explained_variance_ratio)
+    k = np.searchsorted(cumulative_variance, variance_threshold) + 1
+
+    X_pca = X_centered @ eigenvectors[:, :k]
+
+    def apply_pca(X):
+        X_test_centered = X - np.mean(x_train, axis=0)
+        return X_test_centered @ eigenvectors[:, :k]
+    
+    return X_pca, apply_pca
 
 def get_raw_data():
     return x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids

@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-
 from typing import List, Any
+
 import numpy as np
 from metrics import f_score, auc_roc
+from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors
 
 @dataclass
 class CVResult:
@@ -12,42 +13,6 @@ class CVResult:
     train_result: Any
 
 
-def find_best_threshold(scores, true, metric, num_thresholds=201, verbose=False):
-    """Find the best decision threshold for binary classification based on a given metric.
-    Args:
-        scores: np.ndarray of shape (N,), predicted probabilities or scores
-        true: np.ndarray of shape (N,), true binary labels (0 or 1)
-        metric: function(pred, true) -> float, metric to optimize
-        num_thresholds: int, number of thresholds to evaluate
-        """
-    thresholds = np.linspace(0, 1, num_thresholds)
-    metric_vals = [] # collects the metric values for each threshold
-    
-    for t in thresholds:
-        pred = (scores >= t).astype(int)
-        metric_vals.append(metric(pred, true))
-    best_threshold = thresholds[np.argmax(metric_vals)]
-    if verbose: print(f"Best threshold: {best_threshold} with score {np.max(metric_vals)}")
-    return best_threshold
-
-def test_val_split(rng, X, y, val_ratio=0.2):
-    """Split the data into training and validation sets.
-     Args:
-        rng: np.random.Generator
-        X: np.ndarray of shape (N, D)
-        y: np.ndarray of shape (N, )
-        val_ratio: float, ratio of validation data
-    
-    Returns:
-        X_train, y_train, X_val, y_val
-    """
-    num_val = int(X.shape[0] * val_ratio)
-    indices = rng.permutation(X.shape[0])
-    val_idx = indices[:num_val]
-    train_idx = indices[num_val:]
-    X_val, y_val = X[val_idx], y[val_idx]
-    X_train, y_train = X[train_idx], y[train_idx]
-    return X_train, y_train, X_val, y_val
 
 def score_by_group(y_true, pred, probs, group_attr):
     """Compute metrics grouped by a specific attribute. 

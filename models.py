@@ -7,8 +7,46 @@ import numpy as np
 
 from implementations import sigmoid
 from metrics import f_score
-from model_selection import test_val_split, find_best_threshold
-from preprocessing import normalize_and_bias_data
+from preprocessing import normalize_and_bias_data, pca
+
+### HYPERPARAMETER TUNING HELPER FUNCTIONS
+
+def find_best_threshold(scores, true, metric, num_thresholds=201, verbose=False):
+    """Find the best decision threshold for binary classification based on a given metric.
+    Args:
+        scores: np.ndarray of shape (N,), predicted probabilities or scores
+        true: np.ndarray of shape (N,), true binary labels (0 or 1)
+        metric: function(pred, true) -> float, metric to optimize
+        num_thresholds: int, number of thresholds to evaluate
+        """
+    thresholds = np.linspace(0, 1, num_thresholds)
+    metric_vals = [] # collects the metric values for each threshold
+    
+    for t in thresholds:
+        pred = (scores >= t).astype(int)
+        metric_vals.append(metric(pred, true))
+    best_threshold = thresholds[np.argmax(metric_vals)]
+    if verbose: print(f"Best threshold: {best_threshold} with score {np.max(metric_vals)}")
+    return best_threshold
+
+def test_val_split(rng, X, y, val_ratio=0.2):
+    """Split the data into training and validation sets.
+     Args:
+        rng: np.random.Generator
+        X: np.ndarray of shape (N, D)
+        y: np.ndarray of shape (N, )
+        val_ratio: float, ratio of validation data
+    
+    Returns:
+        X_train, y_train, X_val, y_val
+    """
+    num_val = int(X.shape[0] * val_ratio)
+    indices = rng.permutation(X.shape[0])
+    val_idx = indices[:num_val]
+    train_idx = indices[num_val:]
+    X_val, y_val = X[val_idx], y[val_idx]
+    X_train, y_train = X[train_idx], y[train_idx]
+    return X_train, y_train, X_val, y_val
 
 ### LOSS FUNCTIONS
 
@@ -145,7 +183,6 @@ class LogisticRegression():
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
         """
         """
-
         train_losses, val_losses = [], []
 
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
@@ -342,30 +379,37 @@ class LinearSVM:
     
 # kNN
 class KNearestNeighbors:
-    def __init__(self, k=100, metric=None, seed=42):
+    def __init__(self, k=100, metric=None, seed=42, use_pca=False):
         self.k = k
         self.metric = metric
         self.decision_threshold = 0.5
         self.seed = seed
         self.rng = np.random.default_rng(seed)
+        self.use_pca = use_pca
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
         # hyperparameter tuning 
-        X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.2)
+        X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.1)
         self.X = X_train
         X_train = normalize_and_bias_data(X_train)
+        if self.use_pca:
+            X_train, apply_pca = pca(X_train)
+            self.apply_pca = apply_pca
+        print(X_train.shape)
+        print(X_val.shape)
         self.X_train = X_train
         self.y_train = y_train
         # find optimal K and threshold on validation set
         base_k = min(0.1 * X_train.shape[0], np.sqrt(X_train.shape[0]))
-        k_values = list([int(base_k * factor) | 1 for factor in [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]]) # make sure k is odd with bitwise OR
+        k_values = list([int(base_k * factor) | 1 for factor in [0.25, 0.5, 1.0, 1.25, 1.5, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]]) # make sure k is odd with bitwise OR
+        variances = [1/4, 1/3, 1/2, 1.]
+        all_scores = self.predict(X_val, return_max_k=max(k_values))
 
         metric_scores = {}
         thresholds = {}
         for k in k_values:
             if verbose: print(f"Evaluating k={k}")
-            self.k = k
-            scores = self.predict(X_val, scores=True)
+            scores = all_scores[:, k-1]
             if verbose: print("Finding best threshold...")
             thresholds[k] = find_best_threshold(scores, y_val, metric, verbose=verbose)
             predictions = (scores >= thresholds[k]).astype(int)
@@ -384,11 +428,14 @@ class KNearestNeighbors:
         validate_data(X, y)
         self.X = X
         X_train = normalize_and_bias_data(X)
+        if self.use_pca:
+            X_train, apply_pca = pca(X_train)
+            self.apply_pca = apply_pca
         self.X_train = X_train
         self.y_train = y
 
 
-    def predict(self, X, scores=False):
+    def predict(self, X, scores=False, return_max_k=None):
         """
         Predict the label for each point in X.
         Args:
@@ -398,17 +445,23 @@ class KNearestNeighbors:
             predicted labels or probabilities, shape (num_test_samples,)
         """
         _, X = normalize_and_bias_data(self.X, X)
-        probabilities = []
-        for x in X:
-            # Compute Euclidean distances to all training points
-            distances = np.sqrt(np.sum((self.X_train - x) ** 2, axis=1))
-            # Find the indices of the k nearest neighbors
-            k_indices = np.argsort(distances)[:self.k]
-            # Get the labels of the k nearest neighbors
-            k_labels = self.y_train[k_indices]
-            # Compute ratio of positive labels
-            probs = np.mean(k_labels)
-            probabilities.append(probs)
+        if self.use_pca:
+            X = self.apply_pca(X)
+
+        max_k = self.k  if return_max_k is None else return_max_k
+
+        predictions = np.zeros((X.shape[0], max_k))
+        n = X.shape[0]
+        milestones = {min(n - 1, max(0, int(np.ceil(n * p / 20)) - 1)): p * 5 for p in range(1, 21)}
+        for i, x in enumerate(X):
+            if i in milestones:
+                print(f"Processed {milestones[i]}% of test set")
+            distances = np.sqrt(np.sum((self.X_train - x) ** 2, axis=1)) # Compute Euclidean distances to all training points
+            k_indices = np.argsort(distances)
+            sorted_labels = self.y_train[k_indices]
+            predictions[i, :] = np.cumsum(sorted_labels[:max_k]) / np.arange(1, max_k + 1)
+        if return_max_k is not None:
+            return predictions
         if scores: 
-            return np.array(probabilities)
-        return (np.array(probabilities) >= self.decision_threshold).astype(int)
+            return predictions[:, self.k-1]
+        return (predictions[:, self.k-1] >= self.decision_threshold).astype(int)
