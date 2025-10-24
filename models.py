@@ -117,9 +117,10 @@ class OrdinaryLeastSquares():
         w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]  # shape (N,1)
         Xw = X * w_sqrt  # multiply each row by sqrt(weight)
         yw = y * np.sqrt(self.sample_weights)  # shape (N,)
-        self.weights = np.linalg.solve(Xw.T @ Xw, Xw.T @ yw)
+        #self.weights = np.linalg.solve(Xw.T @ Xw, Xw.T @ yw)
+        self.weights, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
 
-    def predict(self, X, scores=False):
+    def predict(self, X, scores=False, save_scores=False, precomputed_scores=None):
         """
         Predict the probablity of Y=1
 
@@ -129,10 +130,15 @@ class OrdinaryLeastSquares():
         Returns:
             np.ndarray of shape (N, ) with predicted labels (0 or 1) or scores
         """
-        _, X = normalize_and_bias_data(self.X, X)
-        preds = X @ self.weights
-        if scores: return sigmoid(preds) # to stay in the range from 0 to 1
+        if precomputed_scores is not None:
+            preds = precomputed_scores
+        else:
+            _, X = normalize_and_bias_data(self.X, X)
+            preds = X @ self.weights
+        if save_scores: self.scores = preds
+        if scores: return sigmoid(preds) # non-parametric Platt scaling
         return (preds >= self.decision_threshold).astype(int)
+
 
 @dataclass
 class LogRegTrainResult:
@@ -147,7 +153,7 @@ class LogRegTrainResult:
 class LogisticRegression():
     """Logistic Regression using Gradient Descent for binary classification (0/1 labels).
     """
-    def __init__(self, max_iter = 1000, gamma = 5e-1, _lambda = 0.0, weighting = True, seed = 42, patience=10, stopping_threshold=1e-6):
+    def __init__(self, max_iter = 1000, gamma = 1e-3, _lambda = 0.0, weighting = True, seed = 42, patience=10, stopping_threshold=1e-4, rho=0.95, eps=1e-8, use_pca=False, variance=0.999):
         # hyperparameters
         self.decision_threshold = 0.5
         self.gamma = gamma
@@ -159,7 +165,12 @@ class LogisticRegression():
         self.seed = seed
         self.stopping_threshold = stopping_threshold
         self.weighting = weighting
-        
+        # --- Optimizer Parameters ---
+        self.rho = rho
+        self.eps = eps
+        self.use_pca = use_pca
+        self.variance = 0.999
+
         # model parameters
         self.weights = None
         self.X = None
@@ -176,9 +187,21 @@ class LogisticRegression():
             a vector of shape (D, 1)
         """
         pred = sigmoid(tx @ self.weights) # σ(x^T w), numerically stable
-        gradient = tx.T @ (self.sample_weights * (pred - y)) / np.sum(self.sample_weights) + 2 * self._lambda * self.weights # weighted gradient
+        gradient = tx.T @ (self.sample_weights * (pred - y)) / np.sum(self.sample_weights) + 2 * self._lambda * np.r_[0, self.weights[1:]] # weighted gradient, not penalizing bias
+        self.gradient = gradient
         assert gradient.shape == self.weights.shape
-        self.weights -= self.gamma * gradient
+
+        # --- Adam optimizer ---
+        self.t += 1
+        beta1, beta2, eps = 0.9, 0.999, 1e-8
+        self.m = beta1 * self.m + (1 - beta1) * gradient
+        self.v = beta2 * self.v + (1 - beta2) * (gradient ** 2)
+        m_hat = self.m / (1 - beta1 ** self.t)
+        v_hat = self.v / (1 - beta2 ** self.t)
+
+        self.weights -= self.gamma * m_hat / (np.sqrt(v_hat) + eps)
+
+        #self.weights -= self.gamma * gradient
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
         """
@@ -188,9 +211,14 @@ class LogisticRegression():
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
         self.X = X_train
         X_train, X_val_biased = normalize_and_bias_data(X_train, X_val)
+        if self.use_pca:
+            X_train, self.apply_pca = pca(X_train, self.variance)
+            if verbose: print(f"Reduced to {X_train.shape[1]} features")
+            X_val_biased = self.apply_pca(X_val_biased)
+        
         self.sample_weights = get_sample_weights(y_train, weighting=self.weighting)
 
-        lambdas = [0.0, 1e-4, 1e-3, 1e-2, 1e-1]
+        lambdas = [0] #, 1e-4, 1e-3, 1e-2, 1e-1] #4
 
         metric_scores, num_iters, thresholds = {}, {}, {}
         train_losses, val_losses = {}, {}
@@ -199,6 +227,9 @@ class LogisticRegression():
             self._lambda = _lambda
             if verbose: print(f"Evaluating lambda={self._lambda}")
             self.weights = np.zeros(X_train.shape[1])
+            self.m = np.zeros_like(self.weights)
+            self.v = np.zeros_like(self.weights)
+            self.t = 0
 
             best_val_loss = np.inf
             patience_counter = 0
@@ -221,9 +252,15 @@ class LogisticRegression():
                         if verbose: print(f"Early stopping at iteration {iter}")
                         self.weights = best_w
                         break
-
+                
                 # gradient step
                 self.gradient_step(y_train, X_train)
+
+                if verbose and iter % 10 == 0:  # every 10 iterations
+                    print(f"Iter {iter:4d}: "
+                          f"loss={val_loss:.4f}")
+               
+
 
             if verbose:
                 print(f"train loss={binary_cross_entropy_loss(y_train, X_train, self.weights)}")
@@ -238,6 +275,7 @@ class LogisticRegression():
         self._lambda = max(metric_scores, key=metric_scores.get)
         self.max_iter = num_iters[self._lambda]
         self.decision_threshold = thresholds[self._lambda]
+        return train_losses[self._lambda], val_losses[self._lambda]
 
     def train(self, X, y):
         """Train the model using gradient descent
@@ -256,12 +294,19 @@ class LogisticRegression():
 
         self.X = X # remember X for normalization during prediction
         X = normalize_and_bias_data(X)
+        if self.use_pca:
+            X, self.apply_pca = pca(X, self.variance)
+
         self.weights = np.zeros(X.shape[1])
+        self.m = np.zeros_like(self.weights)
+        self.v = np.zeros_like(self.weights)
+        self.t = 0
         self.sample_weights = get_sample_weights(y, weighting=self.weighting)
+        
         for _ in range(self.max_iter):
             self.gradient_step(y, X)
 
-    def predict(self, X, scores=False):
+    def predict(self, X, scores=False, save_scores=False, precomputed_scores=None):
         """
         Predict the probablity of Y=1
 
@@ -272,8 +317,14 @@ class LogisticRegression():
         Returns:
             np.ndarray of shape (N, ) with predicted labels (0 or 1) or scores
         """
-        _, X = normalize_and_bias_data(self.X, X)
-        probs = sigmoid(X @ self.weights)
+        if precomputed_scores is not None:
+            probs = precomputed_scores
+        else:
+            _, X = normalize_and_bias_data(self.X, X)
+            if self.use_pca:
+                X = self.apply_pca(X)
+            probs = sigmoid(X @ self.weights)
+        if save_scores: self.scores = probs
         if scores: return probs
         return (probs >= self.decision_threshold).astype(int)
 
@@ -370,16 +421,19 @@ class LinearSVM:
         for _ in range(self.max_iters):
             self.gradient_step(X, y)  # retrain on full data
 
-    def predict(self, X, scores=False):
-        _, X = normalize_and_bias_data(self.X, X)
-        preds = X @ self.w
-        if scores:
-            return sigmoid(preds) # to stay in the range from 0 to 1
+    def predict(self, X, scores=False, save_scores=False, precomputed_scores=None):
+        if precomputed_scores is not None:
+            preds = precomputed_scores
+        else:
+            _, X = normalize_and_bias_data(self.X, X)
+            preds = X @ self.w
+        if save_scores: self.scores = preds
+        if scores: return sigmoid(preds) # to stay in the range from 0 to 1
         return np.sign(preds).astype(int).clip(min=0)  # convert -1/1 to 0/1
     
 # kNN
 class KNearestNeighbors:
-    def __init__(self, k=100, metric=None, seed=42, use_pca=False):
+    def __init__(self, k=100, metric=None, seed=42, use_pca=True):
         self.k = k
         self.metric = metric
         self.decision_threshold = 0.5
@@ -389,7 +443,6 @@ class KNearestNeighbors:
         self.variance = 1.0
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
-        # hyperparameter tuning 
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.05)
         print(X_val.shape)
         self.X = X_train
@@ -399,18 +452,21 @@ class KNearestNeighbors:
         # find optimal K and threshold on validation set
         base_k = min(0.1 * X_train.shape[0], np.sqrt(X_train.shape[0]))
         k_values = list([int(base_k * factor) | 1 for factor in [1/64, 1/32, 1/16, 1/8, 0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]]) # make sure k is odd with bitwise OR
-        variances = [ 1/20, 1/10, 1/6, 1/4, 1/2, 0.75 ]
+        variances = [ 1/20, 1/10, 1/6, 1/4, 1/2, 0.75]#, 0.9, 1.0 ] if self.use_pca else [1.0]
 
         metric_scores = {}
         thresholds = {}
 
         for variance in variances:
             if verbose: print(f"Evaluating variance={variance}")
-            if self.use_pca:
+            if self.use_pca and variance < 1.0:
                 X, apply_pca = pca(X_train, variance)
                 self.apply_pca = apply_pca
+            else:
+                X = X_train
             if verbose: print(f"Reduced to {X.shape[1]} features")
             self.X_train = X
+            self.variance = variance
             all_scores = self.predict(X_val, return_max_k=max(k_values))
 
             for k in k_values:
@@ -434,14 +490,14 @@ class KNearestNeighbors:
         validate_data(X, y)
         self.X = X
         X_train = normalize_and_bias_data(X)
-        if self.use_pca:
+        if self.use_pca and self.variance < 1.0:
             X_train, apply_pca = pca(X_train, self.variance)
             self.apply_pca = apply_pca
         self.X_train = X_train
         self.y_train = y
 
 
-    def predict(self, X, scores=False, return_max_k=None):
+    def predict(self, X, scores=False, return_max_k=None, save_scores=False, precomputed_scores=None):
         """
         Predict the label for each point in X.
         Args:
@@ -450,22 +506,27 @@ class KNearestNeighbors:
         Returns:
             predicted labels or probabilities, shape (num_test_samples,)
         """
-        _, X = normalize_and_bias_data(self.X, X)
-        if self.use_pca:
-            X = self.apply_pca(X)
+        if precomputed_scores is not None:
+            probs = precomputed_scores
+        else:
+            _, X = normalize_and_bias_data(self.X, X)
+            if self.use_pca and self.variance < 1.0:
+                X = self.apply_pca(X)
 
-        max_k = self.k  if return_max_k is None else return_max_k
+            max_k = self.k  if return_max_k is None else return_max_k
 
-        predictions = np.zeros((X.shape[0], max_k))
-        n = X.shape[0]
-        for i, x in enumerate(X):
-            if i % 1000 == 0: print(f"Predicting sample {i}/{n}")
-            distances = np.sqrt(np.sum((self.X_train - x) ** 2, axis=1)) # Compute Euclidean distances to all training points
-            k_indices = np.argsort(distances)
-            sorted_labels = self.y_train[k_indices]
-            predictions[i, :] = np.cumsum(sorted_labels[:max_k]) / np.arange(1, max_k + 1)
-        if return_max_k is not None:
-            return predictions
-        if scores: 
-            return predictions[:, self.k-1]
-        return (predictions[:, self.k-1] >= self.decision_threshold).astype(int)
+            predictions = np.zeros((X.shape[0], max_k))
+            n = X.shape[0]
+            for i, x in enumerate(X):
+                if i % 1000 == 0: print(f"Predicting sample {i}/{n}")
+                distances = np.sqrt(np.sum((self.X_train - x) ** 2, axis=1)) # Compute Euclidean distances to all training points
+                k_indices = np.argsort(distances)
+                sorted_labels = self.y_train[k_indices]
+                predictions[i, :] = np.cumsum(sorted_labels[:max_k]) / np.arange(1, max_k + 1)
+            if return_max_k is not None:
+                return predictions
+        
+            probs = predictions[:, self.k-1]
+        if save_scores: self.scores = probs
+        if scores: return probs
+        return (probs >= self.decision_threshold).astype(int)

@@ -69,8 +69,8 @@ def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbos
         model = model_class(**model_args) # initialize a new model for each fold
         model.hyperparameter_tuning(x_train[train_idx], y_train[train_idx], f_score, verbose=verbose)
         model.train(x_train[train_idx], y_train[train_idx]) # train the model
-        y_val_pred = model.predict(x_train[val_idx]) # predict on validation set
-        y_probs = model.predict(x_train[val_idx], scores=True)
+        y_probs = model.predict(x_train[val_idx], save_scores=True, scores=True)
+        y_val_pred = model.predict(x_train[val_idx], precomputed_scores=model.scores)
 
         y_val = y_train[val_idx]
         if scoring_groups is None:
