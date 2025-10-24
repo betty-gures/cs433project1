@@ -217,7 +217,7 @@ binary
 nominal
 nominal
 nominal
-"A five digit number that combines the values for _STATE (first two characters), _GEOSTR (third and fourth character), and _DENSTR2 (final character)"
+nominal
 continuous
 continuous
 continuous

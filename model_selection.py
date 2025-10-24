@@ -36,7 +36,7 @@ def score_by_group(y_true, pred, probs, group_attr):
         auc_rocs[group_name] = auc_roc(probs[mask], y_true[mask])
     return f1_scores, f2_scores, auc_rocs
 
-def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbose=False, scoring_groups=None, **model_args):
+def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbose=False, scoring_groups=None, max_test=int(1e6), **model_args):
     """Perform k-fold cross-validation.
     
     Args:
@@ -62,7 +62,7 @@ def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbos
     f1_scores, f2_scores, aucrocs, train_results = [], [], [], []
 
     for fold_idx, fold_size in enumerate(fold_sizes):
-        val_idx = indices[current:current + fold_size]
+        val_idx = indices[current:current + fold_size][:max_test]
         train_idx = np.concatenate([indices[:current], indices[current + fold_size:]])
         print(f"Starting fold {fold_idx + 1}/{num_folds} with {train_idx.shape[0]} samples")
  
@@ -82,6 +82,7 @@ def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbos
             f1_scores.append(f1_dict)
             f2_scores.append(f2_dict)
             aucrocs.append(aucroc_dict)
-
+        if verbose:
+            print(f"Fold {fold_idx + 1} - F1: {f1_scores[-1]}, F2: {f2_scores[-1]}, AUC-ROC: {aucrocs[-1]}")
         current += fold_size
     return CVResult(f1_scores, f2_scores, aucrocs, train_results)

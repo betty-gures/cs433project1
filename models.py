@@ -386,37 +386,43 @@ class KNearestNeighbors:
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         self.use_pca = use_pca
+        self.variance = 1.0
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
         # hyperparameter tuning 
-        X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.1)
-        self.X = X_train
-        X_train = normalize_and_bias_data(X_train)
-        if self.use_pca:
-            X_train, apply_pca = pca(X_train)
-            self.apply_pca = apply_pca
-        print(X_train.shape)
+        X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.05)
         print(X_val.shape)
-        self.X_train = X_train
+        self.X = X_train
         self.y_train = y_train
+        X_train = normalize_and_bias_data(X_train)
+        
         # find optimal K and threshold on validation set
         base_k = min(0.1 * X_train.shape[0], np.sqrt(X_train.shape[0]))
-        k_values = list([int(base_k * factor) | 1 for factor in [0.25, 0.5, 1.0, 1.25, 1.5, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]]) # make sure k is odd with bitwise OR
-        variances = [1/4, 1/3, 1/2, 1.]
-        all_scores = self.predict(X_val, return_max_k=max(k_values))
+        k_values = list([int(base_k * factor) | 1 for factor in [1/64, 1/32, 1/16, 1/8, 0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]]) # make sure k is odd with bitwise OR
+        variances = [ 1/20, 1/10, 1/6, 1/4, 1/2, 0.75 ]
 
         metric_scores = {}
         thresholds = {}
-        for k in k_values:
-            if verbose: print(f"Evaluating k={k}")
-            scores = all_scores[:, k-1]
-            if verbose: print("Finding best threshold...")
-            thresholds[k] = find_best_threshold(scores, y_val, metric, verbose=verbose)
-            predictions = (scores >= thresholds[k]).astype(int)
-            metric_scores[k] = metric(predictions, y_val)
-        self.k = max(metric_scores, key=metric_scores.get)
-        self.decision_threshold = thresholds[self.k]
-        if verbose: print(f"Best k found: {self.k} with metric score: {metric_scores[self.k]}")
+
+        for variance in variances:
+            if verbose: print(f"Evaluating variance={variance}")
+            if self.use_pca:
+                X, apply_pca = pca(X_train, variance)
+                self.apply_pca = apply_pca
+            if verbose: print(f"Reduced to {X.shape[1]} features")
+            self.X_train = X
+            all_scores = self.predict(X_val, return_max_k=max(k_values))
+
+            for k in k_values:
+                if verbose: print(f"Evaluating k={k}")
+                scores = all_scores[:, k-1]
+                thresholds[(k, variance)] = find_best_threshold(scores, y_val, metric, verbose=verbose)
+                predictions = (scores >= thresholds[(k, variance)]).astype(int)
+                metric_scores[(k, variance)] = metric(predictions, y_val)
+
+        self.k, self.variance = max(metric_scores, key=metric_scores.get)
+        self.decision_threshold = thresholds[(self.k, self.variance)]
+        if verbose: print(f"Hyperparams found: {self.k}, {self.variance} with metric score: {metric_scores[(self.k, self.variance)]} at threshold {self.decision_threshold}")
 
     def train(self, X, y):
         """
@@ -429,7 +435,7 @@ class KNearestNeighbors:
         self.X = X
         X_train = normalize_and_bias_data(X)
         if self.use_pca:
-            X_train, apply_pca = pca(X_train)
+            X_train, apply_pca = pca(X_train, self.variance)
             self.apply_pca = apply_pca
         self.X_train = X_train
         self.y_train = y
@@ -452,10 +458,8 @@ class KNearestNeighbors:
 
         predictions = np.zeros((X.shape[0], max_k))
         n = X.shape[0]
-        milestones = {min(n - 1, max(0, int(np.ceil(n * p / 20)) - 1)): p * 5 for p in range(1, 21)}
         for i, x in enumerate(X):
-            if i in milestones:
-                print(f"Processed {milestones[i]}% of test set")
+            if i % 1000 == 0: print(f"Predicting sample {i}/{n}")
             distances = np.sqrt(np.sum((self.X_train - x) ** 2, axis=1)) # Compute Euclidean distances to all training points
             k_indices = np.argsort(distances)
             sorted_labels = self.y_train[k_indices]
