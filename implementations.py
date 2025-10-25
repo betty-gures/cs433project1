@@ -1,8 +1,8 @@
 import numpy as np
 
 
-def compute_loss(y, tx, w):
-    """Calculate the loss using either MSE or MAE.
+def compute_mse(y, tx, w):
+    """Calculate the MSE loss.
 
     Args:
         y: shape=(N, )
@@ -17,7 +17,7 @@ def compute_loss(y, tx, w):
     return (e.T @ e) / (2 * y.shape[0])
 
 
-def compute_gradient(y, tx, w, type="mse", stochastic=False):
+def compute_mse_gradient(y, tx, w, stochastic=False):
     if stochastic:
         random_index = np.random.randint(y.shape[0])
         tx = tx[random_index, :].reshape(1, -1)
@@ -51,7 +51,7 @@ def gradient_descent(
 
     for n_iter in range(max_iters):
         # compute gradient and loss
-        loss = compute_loss(y, tx, w)
+        loss = compute_mse(y, tx, w)
         losses.append(loss)
 
         gradient = gradient_function(y, tx, w)
@@ -68,8 +68,8 @@ def gradient_descent(
                 )
             )
 
-    # if max_iters is 0, we still want to return the initial loss
-    loss = compute_loss(y, tx, w)
+    
+    loss = compute_mse(y, tx, w) # compute final loss after last gradient update
     return w, losses if return_history else loss
 
 
@@ -90,8 +90,8 @@ def mean_squared_error_gd(
         ws: a list of length max_iters + 1 containing the model parameters as numpy arrays of shape (2, ),
             for each iteration of GD (as well as the final weights)
     """
-    gradient_function = lambda y, tx, w: compute_gradient(
-        y, tx, w, type="mse", stochastic=False
+    gradient_function = lambda y, tx, w: compute_mse_gradient(
+        y, tx, w, stochastic=False
     )
     return gradient_descent(
         y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose
@@ -115,8 +115,8 @@ def mean_squared_error_sgd(
         ws: a list of length max_iters + 1 containing the model parameters as numpy arrays of shape (2, ),
             for each iteration of SGD (as well as the final weights)
     """
-    gradient_function = lambda y, tx, w: compute_gradient(
-        y, tx, w, type="mse", stochastic=True
+    gradient_function = lambda y, tx, w: compute_mse_gradient(
+        y, tx, w, stochastic=True
     )
     return gradient_descent(
         y, tx, initial_w, max_iters, gamma, gradient_function, return_history, verbose
@@ -135,7 +135,7 @@ def least_squares(y, tx):
         mse: scalar.
     """
     w = np.linalg.solve(tx.T @ tx, tx.T @ y) # w = (X^T X)^(-1) X^T y
-    loss = compute_loss(y, tx, w)
+    loss = compute_mse(y, tx, w)
     return w, loss
 
 
@@ -158,11 +158,12 @@ def ridge_regression(y, tx, lambda_):
     w = np.linalg.solve(
         gram_matrix + diag_reg, tx.T @ y
     )  # w = (X^T X + 2 N lambda I)^(-1) X^T y
-    return w, compute_loss(y, tx, w)
+    loss = compute_mse(y, tx, w)
+    return w, loss
 
 
 def sigmoid(t):
-    """apply sigmoid function on t (Numerically stable version using different formulas for positive and negative t)
+    """Apply sigmoid function on t (Numerically stable version using different formulas for positive and negative t)
 
     Args:
         t: logits, scalar or numpy array
@@ -174,9 +175,9 @@ def sigmoid(t):
     t = np.asarray(t, dtype=np.float64) # convert to np array if needed
     out = np.empty_like(t)
     pos = t >= 0
-    out[pos] = 1 / (1 + np.exp(-t[pos]))
+    out[pos] = 1 / (1 + np.exp(-t[pos])) # for positive t: 1 / (1 + exp(-t))
     exp_t = np.exp(t[~pos])
-    out[~pos] = exp_t / (1 + exp_t)
+    out[~pos] = exp_t / (1 + exp_t) # for negative t: exp(t) / (1 + exp(t))
     return out
 
 
@@ -249,7 +250,7 @@ def reg_logistic_regression(
         y_pred = pred(tx, w_new)  # shape=(N, 1)
         loss_new = loss(y_pred, w_new, True)
 
-        # if the improvement is below the threshold, stop
+        # early stopping: if the improvement is below the threshold, stop
         if np.abs(losses[-1] - loss_new) < stopping_threshold:
             break
         losses.append(loss_new)

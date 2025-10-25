@@ -12,6 +12,8 @@ base_dir = Path(__file__).parent
 dataset_dir = base_dir / "data/dataset"
 x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = None, None, None, None, None
 MAX_ONE_HOT_CATEGORIES=100
+COL_REMOVE_MANUAL = np.array([0, 2, 8, 36, 38, 40, 45, 52, 60, 87, 90, 93, 104, 222, 225, 244, 246, 249, 251, 274, 282, 283, 288, 307, 308])
+   
 
 # load and parse missing values
 missing_values = []
@@ -71,6 +73,8 @@ def preprocess(replace_nan_codes=True, one_hot_encoding=True, save_dir=None):
         nominal_features = np.where(np.array(variable_type)=="nominal")[0]
         one_hot_encoded = []
         for idx in nominal_features:
+            if idx in COL_REMOVE_MANUAL:
+                continue
             unique_vals = np.unique(x_train[:, idx])
             if len(unique_vals) < MAX_ONE_HOT_CATEGORIES:
                 train_cols = [(x_train[:, idx] == val).astype(float) for val in unique_vals[:-1] if ~np.isnan(val)]
@@ -100,7 +104,7 @@ def impute_missing_values(train, test):
     return test
 
 
-def normalize_and_bias_data(x_train, x_test=None, one_hot_encoding=True, squared_features=True):
+def normalize_and_bias_data(x_train, x_test=None, squared_features=True):
     """Standardize data and add bias term.
     Args:
         x_train: np.ndarray of shape (N_train, D)
@@ -109,13 +113,20 @@ def normalize_and_bias_data(x_train, x_test=None, one_hot_encoding=True, squared
         x_train_std: np.ndarray of shape (N_train, D+1)
         x_test_std: np.ndarray of shape (N_test, D+1)
     """ 
+    one_hot_encoding = x_train.shape[1] > len(variable_type) # one-hot encoding was applied
+
     # missing data imputation
     x_train = impute_missing_values(x_train, x_train)
     if x_test is not None: x_test = impute_missing_values(x_train, x_test)
     
+    # manual duplicates removal
+    x_train = np.delete(x_train, COL_REMOVE_MANUAL, axis=1)
+    remaining_var_types = np.delete(variable_type, COL_REMOVE_MANUAL)
+
     # invariant feature removal
     stds_train = np.std(x_train, axis=0)
     x_train = x_train[:, (stds_train > 0)]
+    remaining_var_types = np.delete(remaining_var_types, (stds_train == 0)[:len(remaining_var_types)])
 
     # feature scaling by standardization
     mean = x_train.mean(axis=0)
@@ -123,14 +134,13 @@ def normalize_and_bias_data(x_train, x_test=None, one_hot_encoding=True, squared
     assert not np.any(std == 0), "At least one feature has zero standard deviation."
     x_train = (x_train - mean) / std
     
-    remaining_var_types = np.array(variable_type)[(stds_train > 0)[:len(variable_type)]]
     # squaring continuous features
     if squared_features:
-        
         squared_feature_idx = np.array([i for i, var_type in enumerate(remaining_var_types) if var_type in ["ordinal", "continuous"]])
         x_train = np.column_stack([x_train, x_train[:, squared_feature_idx] ** 2])
 
-    if one_hot_encoding:
+    
+    if one_hot_encoding: 
         one_hot_encoded = [i for i, t in enumerate(remaining_var_types) if t == "nominal"]
         x_train = np.delete(x_train, one_hot_encoded, axis=1)
 
@@ -140,7 +150,7 @@ def normalize_and_bias_data(x_train, x_test=None, one_hot_encoding=True, squared
     if x_test is None:
         return remove_duplicate_columns(x_train)
     
-    
+    x_test = np.delete(x_test, COL_REMOVE_MANUAL, axis=1)
     x_test = x_test[:, (stds_train > 0)]
     x_test = (x_test - mean) / std
     if squared_features:
@@ -164,18 +174,11 @@ def pca(x_train, variance_threshold=0.2):
     k = np.searchsorted(cumulative_variance, variance_threshold) + 1
 
     X_pca = X_centered @ eigenvectors[:, :k]
-    # rescaling and whitening
-    # alpha = 0
-    # scales = np.power(eigenvalues[:k], -alpha)
-    # pca_mean = np.mean(X_pca, axis=0)
-    # pca_std = np.std(X_pca, axis=0, ddof=0)
-    # pca_std[pca_std == 0] = 1.0  # avoid divide-by-zero
-    # X_pca = (X_pca - pca_mean)  * scales
 
     def apply_pca(X):
         X_test_centered = X - X_mean
         X_test_pca = X_test_centered @ eigenvectors[:, :k]
-        return X_test_pca # (X_test_pca - pca_mean)  * scales
+        return X_test_pca
     
     return X_pca, apply_pca
 

@@ -1,0 +1,9 @@
+Model: LogisticRegression
+
+cv_results repr:
+CVResult(f1_scores=[np.float64(0.42027263194687176), np.float64(0.4228657699698051), np.float64(0.421446025585741), np.float64(0.4302210956203351), np.float64(0.42741702741702736)], f2_scores=[np.float64(0.47794702197347927), np.float64(0.4866683515511468), np.float64(0.46686411260787875), np.float64(0.48161811073275307), np.float64(0.46926489226869456)], auc_rocs=[np.float64(0.8590232409155216), np.float64(0.8564968558644145), np.float64(0.8604741183004111), np.float64(0.861901016863053), np.float64(0.8583443481399691)], train_result=[])
+
+Aggregated metrics:
+Average F1-score: 42.4% ± 0.4
+Average F2-score: 47.6% ± 0.7
+Average AUC-ROC: 85.9% ± 0.2

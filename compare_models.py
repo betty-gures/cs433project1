@@ -5,20 +5,19 @@ import numpy as np
 
 from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors
 from model_selection import cross_validation
+from preprocessing import preprocess
 
-train = np.load("data/dataset_prep/train.npz")
-x_train, y_train = train["x_train"], train["y_train"]
-    
+x_train, _, y_train, _ = preprocess(one_hot_encoding=False)
     
 model_settings = [
-    {"model_class": OrdinaryLeastSquares},
+    #{"model_class": OrdinaryLeastSquares},
     {"model_class": LogisticRegression},
     #{"model_class": LinearSVM},
     #{"model_class": KNearestNeighbors},
 ]
 for model in model_settings:
     print(f"Cross-validating model: {model['model_class'].__name__}")
-    num_samples = int(1e4)
+    num_samples = int(1e6)
     cv_results = cross_validation(x_train[:num_samples], y_train[:num_samples], verbose=True, max_test=20000 if model['model_class'] == KNearestNeighbors else int(1e6), **model)
 
     out_dir = "results"

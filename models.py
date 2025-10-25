@@ -27,7 +27,7 @@ def find_best_threshold(scores, true, metric, num_thresholds=201, verbose=False)
         metric_vals.append(metric(pred, true))
     best_threshold = thresholds[np.argmax(metric_vals)]
     if verbose: print(f"Best threshold: {best_threshold} with score {np.max(metric_vals)}")
-    return best_threshold
+    return best_threshold, np.max(metric_vals)
 
 def test_val_split(rng, X, y, val_ratio=0.2):
     """Split the data into training and validation sets.
@@ -79,6 +79,17 @@ def get_sample_weights(y, weighting=False):
 def validate_data(X, y):
     assert set(np.unique(y)).issubset({0, 1}), "y must be in {0, 1}"
     assert X.shape[0] == y.shape[0], "X and y must have the same number of samples"
+    
+def validate_features(X, _lambda=0):
+    assert not np.any(~np.isfinite(X))
+
+    xtx = X.T @ X
+    cond_number = np.linalg.cond(xtx + _lambda * np.eye(X.shape[1]))
+    print(f"Condition number of X^T X: {cond_number:.2e}")
+
+    # Optional: warn if it's too large
+    if cond_number > 1e10:
+        print("⚠️ Warning: X^T X is ill-conditioned — check for multicollinearity or redundant features.")
 
 
 ### MODELS
@@ -86,21 +97,36 @@ def validate_data(X, y):
 class OrdinaryLeastSquares():
     """(Weighted) Ordinary Least Squares Regression for binary classification (0/1 labels) using closed-form solution.
     """
-    def __init__(self, seed = 42, weighting = True):
+    def __init__(self, _lambda=0, seed = 42, weighting = True, squared_features = True, tune_threshold=True):
+        # Model parameters
         self.weights = None
-        self.decision_threshold = 0.5
-        self.weighting = weighting
-        self.seed = seed
+        # Hyperparameters
+        self.decision_threshold = sigmoid(0.5)
+        self._lambda = _lambda
         self.rng = np.random.default_rng(seed) # local random generator
+        self.seed = seed
+        self.squared_features = squared_features
+        self.tune_threshold = tune_threshold
+        self.weighting = weighting
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
-        """Tune the decision threshold with a validation set"""
-        X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
+        """Tune the decision threshold with a validation set
+        Args:
+            X: np.ndarray of shape (N, D)
+            y: np.ndarray of shape (N, )
         
-        self.train(X_train, y_train)
+        Returns:
+            None
+        """
+        if self.tune_threshold:
+            X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
+            
+            self.train(X_train, y_train)
 
-        scores = self.predict(X_val, scores=True)
-        self.decision_threshold = find_best_threshold(scores, y_val, metric, verbose=verbose)
+            scores = self.predict(X_val, scores=True)
+            self.decision_threshold, best_score = find_best_threshold(scores, y_val, metric, verbose=verbose)
+
+        return self.decision_threshold, best_score
 
     def train(self, X, y):
         """Fit the model to data using ordinary least squares.
@@ -108,17 +134,36 @@ class OrdinaryLeastSquares():
         Args:
             X (np.array): training data
             y (np.array): labels for training data in format (0,1)
+
+        Returns:
+            None
         """
         validate_data(X, y)
         self.X = X
-        X = normalize_and_bias_data(X)
-        
+        X = normalize_and_bias_data(X, squared_features=self.squared_features)
+
+        # self.sample_weights = get_sample_weights(y, weighting=self.weighting)
+        # w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]  # shape (N,1)
+        # Xw = X * w_sqrt  # multiply each row by sqrt(weight)
+        # yw = y * np.sqrt(self.sample_weights)  # shape (N,)
+        # #self.weights = np.linalg.solve(Xw.T @ Xw, Xw.T @ yw)
+        # self.weights, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
+
         self.sample_weights = get_sample_weights(y, weighting=self.weighting)
-        w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]  # shape (N,1)
-        Xw = X * w_sqrt  # multiply each row by sqrt(weight)
-        yw = y * np.sqrt(self.sample_weights)  # shape (N,)
-        #self.weights = np.linalg.solve(Xw.T @ Xw, Xw.T @ yw)
-        self.weights, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
+        w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]
+
+        Xw = X * w_sqrt
+        yw = y * np.sqrt(self.sample_weights)
+
+        # Regularization matrix (no penalty on bias term)
+        D = np.eye(Xw.shape[1])
+        D[0, 0] = 0
+
+        # Ridge-augmented least squares
+        X_aug = np.vstack([Xw, self._lambda * D])
+        y_aug = np.concatenate([yw, np.zeros(Xw.shape[1])])
+
+        self.weights, *_ = np.linalg.lstsq(X_aug, y_aug, rcond=None)
 
     def predict(self, X, scores=False, save_scores=False, precomputed_scores=None):
         """
@@ -133,27 +178,17 @@ class OrdinaryLeastSquares():
         if precomputed_scores is not None:
             preds = precomputed_scores
         else:
-            _, X = normalize_and_bias_data(self.X, X)
+            _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             preds = X @ self.weights
         if save_scores: self.scores = preds
         if scores: return sigmoid(preds) # non-parametric Platt scaling
-        return (preds >= self.decision_threshold).astype(int)
+        return (sigmoid(preds) >= self.decision_threshold).astype(int)
 
-
-@dataclass
-class LogRegTrainResult:
-    iterations: int
-    train_losses: List[float]
-    val_losses: List[float]
-    decision_threshold: float
-    weighting: bool
-    gamma: float
-    seed: int
 
 class LogisticRegression():
     """Logistic Regression using Gradient Descent for binary classification (0/1 labels).
     """
-    def __init__(self, max_iter = 1000, gamma = 1e-3, _lambda = 0.0, weighting = True, seed = 42, patience=10, stopping_threshold=1e-4, rho=0.95, eps=1e-8, use_pca=False, variance=0.999):
+    def __init__(self, max_iter = 1000, gamma = 1e-1, _lambda = 0.0, weighting = True, seed = 42, patience=25, squared_features=False, stopping_threshold=1e-4):
         # hyperparameters
         self.decision_threshold = 0.5
         self.gamma = gamma
@@ -163,13 +198,9 @@ class LogisticRegression():
         self.rng = np.random.default_rng(seed) # local random generator
         self.sample_weights = None
         self.seed = seed
+        self.squared_features = squared_features
         self.stopping_threshold = stopping_threshold
-        self.weighting = weighting
-        # --- Optimizer Parameters ---
-        self.rho = rho
-        self.eps = eps
-        self.use_pca = use_pca
-        self.variance = 0.999
+        self.weighting = weighting       
 
         # model parameters
         self.weights = None
@@ -192,33 +223,32 @@ class LogisticRegression():
         assert gradient.shape == self.weights.shape
 
         # --- Adam optimizer ---
-        self.t += 1
-        beta1, beta2, eps = 0.9, 0.999, 1e-8
-        self.m = beta1 * self.m + (1 - beta1) * gradient
-        self.v = beta2 * self.v + (1 - beta2) * (gradient ** 2)
-        m_hat = self.m / (1 - beta1 ** self.t)
-        v_hat = self.v / (1 - beta2 ** self.t)
+        # self.t += 1
+        # beta1, beta2, eps = 0.9, 0.9999, 1e-8
+        # #self.m = beta1 * self.m + (1 - beta1) * gradient
+        # self.v = beta2 * self.v + (1 - beta2) * (gradient ** 2)
+        # #m_hat = self.m / (1 - beta1 ** self.t)
+        # v_hat = self.v / (1 - beta2 ** self.t)
 
-        self.weights -= self.gamma * m_hat / (np.sqrt(v_hat) + eps)
+        # self.weights -= self.gamma * gradient / (np.sqrt(v_hat) + eps)
 
-        #self.weights -= self.gamma * gradient
+        self.weights -= self.gamma * gradient
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
         """
         """
+        validate_data(X, y)
+
         train_losses, val_losses = [], []
 
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
         self.X = X_train
-        X_train, X_val_biased = normalize_and_bias_data(X_train, X_val)
-        if self.use_pca:
-            X_train, self.apply_pca = pca(X_train, self.variance)
-            if verbose: print(f"Reduced to {X_train.shape[1]} features")
-            X_val_biased = self.apply_pca(X_val_biased)
+        X_train, X_val_biased = normalize_and_bias_data(X_train, X_val, squared_features=self.squared_features)
+       
         
         self.sample_weights = get_sample_weights(y_train, weighting=self.weighting)
 
-        lambdas = [0] #, 1e-4, 1e-3, 1e-2, 1e-1] #4
+        lambdas = [0, 1e-4, 1e-3, 1e-2, 1e-1] 
 
         metric_scores, num_iters, thresholds = {}, {}, {}
         train_losses, val_losses = {}, {}
@@ -230,6 +260,7 @@ class LogisticRegression():
             self.m = np.zeros_like(self.weights)
             self.v = np.zeros_like(self.weights)
             self.t = 0
+            validate_features(X_train, self._lambda)
 
             best_val_loss = np.inf
             patience_counter = 0
@@ -267,7 +298,7 @@ class LogisticRegression():
                 print(f"val loss={binary_cross_entropy_loss(y_val, X_val_biased, self.weights)}")
             
             scores = self.predict(X_val, scores=True)
-            thresholds[_lambda] = find_best_threshold(scores, y_val, metric, verbose=verbose)
+            thresholds[_lambda], _ = find_best_threshold(scores, y_val, metric, verbose=verbose)
             
             metric_scores[_lambda] = metric(self.predict(X_val), y_val)
             num_iters[_lambda] = iter + 1
@@ -287,15 +318,15 @@ class LogisticRegression():
             verbose (bool, optional): If True, print out information along the training. Defaults to True.
 
         Returns:
-            LogRegTrainResult: dataclass containing training information
+            None
         """
 
         validate_data(X, y)
 
         self.X = X # remember X for normalization during prediction
-        X = normalize_and_bias_data(X)
-        if self.use_pca:
-            X, self.apply_pca = pca(X, self.variance)
+        X = normalize_and_bias_data(X, squared_features=self.squared_features)
+
+        validate_features(X, self._lambda)
 
         self.weights = np.zeros(X.shape[1])
         self.m = np.zeros_like(self.weights)
@@ -320,9 +351,7 @@ class LogisticRegression():
         if precomputed_scores is not None:
             probs = precomputed_scores
         else:
-            _, X = normalize_and_bias_data(self.X, X)
-            if self.use_pca:
-                X = self.apply_pca(X)
+            _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             probs = sigmoid(X @ self.weights)
         if save_scores: self.scores = probs
         if scores: return probs
@@ -472,7 +501,7 @@ class KNearestNeighbors:
             for k in k_values:
                 if verbose: print(f"Evaluating k={k}")
                 scores = all_scores[:, k-1]
-                thresholds[(k, variance)] = find_best_threshold(scores, y_val, metric, verbose=verbose)
+                thresholds[(k, variance)], _ = find_best_threshold(scores, y_val, metric, verbose=verbose)
                 predictions = (scores >= thresholds[(k, variance)]).astype(int)
                 metric_scores[(k, variance)] = metric(predictions, y_val)
 
