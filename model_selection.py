@@ -12,8 +12,6 @@ class CVResult:
     auc_rocs: List[float]
     train_result: Any
 
-
-
 def score_by_group(y_true, pred, probs, group_attr):
     """Compute metrics grouped by a specific attribute. 
     Args:
@@ -70,7 +68,7 @@ def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbos
         model.hyperparameter_tuning(x_train[train_idx], y_train[train_idx], f_score, verbose=verbose)
         model.train(x_train[train_idx], y_train[train_idx]) # train the model
         y_probs = model.predict(x_train[val_idx], save_scores=True, scores=True)
-        y_val_pred = model.predict(x_train[val_idx], precomputed_scores=model.scores)
+        y_val_pred = model.predict(x_train[val_idx], use_scores=True)
 
         y_val = y_train[val_idx]
         if scoring_groups is None:

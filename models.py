@@ -165,7 +165,7 @@ class OrdinaryLeastSquares():
 
         self.weights, *_ = np.linalg.lstsq(X_aug, y_aug, rcond=None)
 
-    def predict(self, X, scores=False, save_scores=False, precomputed_scores=None):
+    def predict(self, X, scores=False, save_scores=False, use_scores=False):
         """
         Predict the probablity of Y=1
 
@@ -175,14 +175,14 @@ class OrdinaryLeastSquares():
         Returns:
             np.ndarray of shape (N, ) with predicted labels (0 or 1) or scores
         """
-        if precomputed_scores is not None:
-            preds = precomputed_scores
+        if use_scores:
+            preds = self.scores
         else:
             _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             preds = X @ self.weights
         if save_scores: self.scores = preds
         if scores: return sigmoid(preds) # non-parametric Platt scaling
-        return (sigmoid(preds) >= self.decision_threshold).astype(int)
+        return (preds >= self.decision_threshold).astype(int)
 
 
 class LogisticRegression():
@@ -337,7 +337,7 @@ class LogisticRegression():
         for _ in range(self.max_iter):
             self.gradient_step(y, X)
 
-    def predict(self, X, scores=False, save_scores=False, precomputed_scores=None):
+    def predict(self, X, scores=False, save_scores=False, use_scores=False):
         """
         Predict the probablity of Y=1
 
@@ -348,8 +348,8 @@ class LogisticRegression():
         Returns:
             np.ndarray of shape (N, ) with predicted labels (0 or 1) or scores
         """
-        if precomputed_scores is not None:
-            probs = precomputed_scores
+        if use_scores:
+            probs = self.scores
         else:
             _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             probs = sigmoid(X @ self.weights)
@@ -370,7 +370,7 @@ def hinge_loss(y, X, w, _lambda=1.0, include_reg=True):
         return np.mean(hinge)
 
 class LinearSVM:
-    def __init__(self, _lambda=1.0, lr=0.1, metric=None, max_iters=1000, patience=10, seed=42):
+    def __init__(self, _lambda=1.0, lr=0.1, metric=None, max_iters=1000, patience=10, seed=42, squared_features=False):
         # hyperparameters
         self._lambda = _lambda
         self.lr = lr
@@ -378,6 +378,7 @@ class LinearSVM:
         self.max_iters = max_iters
         self.rng = np.random.default_rng(seed)
         self.patience = patience
+        self.squared_features = squared_features
         # model parameters
         self.w = None
 
@@ -388,10 +389,9 @@ class LinearSVM:
         self.w -= self.lr * dw # gradient descent update
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
-        
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
         self.X = X_train
-        X_train, X_val_biased = normalize_and_bias_data(X_train, X_val)
+        X_train, X_val_biased = normalize_and_bias_data(X_train, X_val, squared_features=self.squared_features)
 
         lambdas = [0.25, 0.5, 1.0, 2.0, 4.0]
         lrs = [0.01, 0.1]
@@ -403,7 +403,6 @@ class LinearSVM:
             train_losses[(_lambda, lr)] = []
             val_losses[(_lambda, lr)] = []
             
-            
             self._lambda = _lambda
             self.lr = lr
 
@@ -412,10 +411,10 @@ class LinearSVM:
             self.w = np.zeros(X_train.shape[1]) # initialize weights
             for iter in range(self.max_iters):
                 train_loss = hinge_loss(y_train, X_train, self.w, _lambda=_lambda, include_reg=False)
-                #if verbose: print(f"Iteration {iter}, Training Loss: {train_loss}")
                 train_losses[(_lambda, lr)].append(train_loss)
                 val_loss = hinge_loss(y_val, X_val_biased, self.w, _lambda=_lambda, include_reg=False)
                 val_losses[(_lambda, lr)].append(val_loss)
+                if verbose and iter % 100 == 0: print(f"Iteration {iter}, Training Loss: {train_loss}, Validation Loss: {val_loss}")
 
                 # early stopping check
                 if val_loss < best_val_loss:
@@ -443,25 +442,28 @@ class LinearSVM:
         validate_data(X, y)
 
         self.X = X # remember X for normalization during prediction
-        X = normalize_and_bias_data(X)
+        X = normalize_and_bias_data(X, squared_features=self.squared_features)
         y = np.where(y <= 0, -1, 1)  # ensure labels are -1 or 1
         
         self.w = np.zeros(X.shape[1])  # initialize weights
         for _ in range(self.max_iters):
             self.gradient_step(X, y)  # retrain on full data
 
-    def predict(self, X, scores=False, save_scores=False, precomputed_scores=None):
-        if precomputed_scores is not None:
-            preds = precomputed_scores
+    def predict(self, X, scores=False, save_scores=False, use_scores=False):
+        if use_scores:
+            preds = self.scores
+            print("use saved scores")
         else:
-            _, X = normalize_and_bias_data(self.X, X)
+            _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             preds = X @ self.w
         if save_scores: self.scores = preds
-        if scores: return sigmoid(preds) # to stay in the range from 0 to 1
+        if scores: return sigmoid(preds) # non-parametric Platt scaling
         return np.sign(preds).astype(int).clip(min=0)  # convert -1/1 to 0/1
     
 # kNN
 class KNearestNeighbors:
+    """k-Nearest Neighbors classifier for binary classification (0/1 labels).
+    """
     def __init__(self, k=100, metric=None, seed=42, use_pca=True):
         self.k = k
         self.metric = metric
@@ -481,7 +483,7 @@ class KNearestNeighbors:
         # find optimal K and threshold on validation set
         base_k = min(0.1 * X_train.shape[0], np.sqrt(X_train.shape[0]))
         k_values = list([int(base_k * factor) | 1 for factor in [1/64, 1/32, 1/16, 1/8, 0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]]) # make sure k is odd with bitwise OR
-        variances = [ 1/20, 1/10, 1/6, 1/4, 1/2, 0.75]#, 0.9, 1.0 ] if self.use_pca else [1.0]
+        variances = [ 1/20, 1/10, 1/6, 1/4, 1/2, 0.75, 0.9, 1.0 ] if self.use_pca else [1.0]
 
         metric_scores = {}
         thresholds = {}

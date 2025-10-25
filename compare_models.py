@@ -7,20 +7,27 @@ from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearest
 from model_selection import cross_validation
 from preprocessing import preprocess
 
-x_train, _, y_train, _ = preprocess(one_hot_encoding=False)
-    
+## configuration
+out_dir = "results"
+one_hot_encoding=True
+num_samples = int(1e6)
+
 model_settings = [
     #{"model_class": OrdinaryLeastSquares},
-    {"model_class": LogisticRegression},
-    #{"model_class": LinearSVM},
+    #{"model_class": LogisticRegression},
+    {"model_class": LinearSVM},
     #{"model_class": KNearestNeighbors},
 ]
+
+# Loading data
+x_train, _, y_train, _ = preprocess(one_hot_encoding=one_hot_encoding)
+    
 for model in model_settings:
     print(f"Cross-validating model: {model['model_class'].__name__}")
-    num_samples = int(1e6)
-    cv_results = cross_validation(x_train[:num_samples], y_train[:num_samples], verbose=True, max_test=20000 if model['model_class'] == KNearestNeighbors else int(1e6), **model)
+    
+    cv_results = cross_validation(x_train[:num_samples], y_train[:num_samples], verbose=True, max_test=20000 if model['model_class'] == KNearestNeighbors else num_samples, **model)
 
-    out_dir = "results"
+    
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{model['model_class'].__name__}.txt")
 
