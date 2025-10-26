@@ -6,8 +6,9 @@
 \toprule
 \textbf{Attribute} & \textbf{F1-score (\%)}\
 \midrule
-Male & 46.1±0.3\\
-Female & 38.7±0.7\\
+Under 65 & 36.6±0.5\\
+Above 65 & 45.3±0.6\\
+Unknown & 30.5±4.8\\
 \bottomrule
 \end{tabular}
 \end{table}

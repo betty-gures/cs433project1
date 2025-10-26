@@ -80,15 +80,6 @@ def validate_data(X, y):
     assert set(np.unique(y)).issubset({0, 1}), "y must be in {0, 1}"
     assert X.shape[0] == y.shape[0], "X and y must have the same number of samples"
     
-def validate_features(X, _lambda=0):
-    assert not np.any(~np.isfinite(X))
-
-    xtx = X.T @ X
-    cond_number = np.linalg.cond(xtx + _lambda * np.eye(X.shape[1]))
-    print(f"Condition number of X^T X: {cond_number:.2e}")
-
-    if cond_number > 1e10:
-        print("Warning: X^T X is ill-conditioned — check for multicollinearity or redundant features.")
 
 
 ### MODELS
@@ -140,7 +131,6 @@ class OrdinaryLeastSquares():
         validate_data(X, y)
         self.X = X
         X, _ = normalize_and_bias_data(X, squared_features=self.squared_features)
-        validate_features(X, self._lambda)
 
         # self.sample_weights = get_sample_weights(y, weighting=self.weighting)
         # w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]  # shape (N,1)
@@ -269,7 +259,6 @@ class LogisticRegression():
             self.m = np.zeros_like(self.weights)
             self.v = np.zeros_like(self.weights)
             self.t = 0
-            validate_features(X_train, self._lambda)
 
             best_val_loss = np.inf
             patience_counter = 0
@@ -334,8 +323,6 @@ class LogisticRegression():
 
         self.X = X # remember X for normalization during prediction
         X, _ = normalize_and_bias_data(X, squared_features=self.squared_features)
-
-        validate_features(X, self._lambda)
 
         self.weights = np.zeros(X.shape[1])
         self.m = np.zeros_like(self.weights)
@@ -511,12 +498,13 @@ class LinearSVM:
 class KNearestNeighbors:
     """k-Nearest Neighbors classifier for binary classification (0/1 labels).
     """
-    def __init__(self, k=100, metric=None, seed=42, use_pca=True):
+    def __init__(self, k=100, metric=None, seed=42, squared_features=False, use_pca=True):
         self.k = k
         self.metric = metric
         self.decision_threshold = 0.5
         self.seed = seed
         self.rng = np.random.default_rng(seed)
+        self.squared_features = squared_features
         self.use_pca = use_pca
         self.variance = 1.0
 
@@ -525,7 +513,7 @@ class KNearestNeighbors:
         print(X_val.shape)
         self.X = X_train
         self.y_train = y_train
-        X_train, _ = normalize_and_bias_data(X_train)
+        X_train, _ = normalize_and_bias_data(X_train, squared_features=self.squared_features)
         
         # find optimal K and threshold on validation set
         base_k = min(0.1 * X_train.shape[0], np.sqrt(X_train.shape[0]))
@@ -560,14 +548,14 @@ class KNearestNeighbors:
 
     def train(self, X, y):
         """
-        Store the training data.
+        Lazy function. Only store the preprocessed training data.
         X: training features, shape (num_samples, num_features)
         y: training labels, shape (num_samples,)
         """
 
         validate_data(X, y)
         self.X = X
-        X_train, _ = normalize_and_bias_data(X)
+        X_train, _ = normalize_and_bias_data(X, squared_features=self.squared_features)
         if self.use_pca and self.variance < 1.0:
             X_train, apply_pca = pca(X_train, self.variance)
             self.apply_pca = apply_pca
@@ -575,7 +563,7 @@ class KNearestNeighbors:
         self.y_train = y
 
 
-    def predict(self, X, scores=False, return_max_k=None, save_scores=False, precomputed_scores=None):
+    def predict(self, X, scores=False, return_max_k=None, save_scores=False, use_scores=False):
         """
         Predict the label for each point in X.
         Args:
@@ -584,10 +572,10 @@ class KNearestNeighbors:
         Returns:
             predicted labels or probabilities, shape (num_test_samples,)
         """
-        if precomputed_scores is not None:
-            probs = precomputed_scores
+        if use_scores:
+            probs = self.scores
         else:
-            _, X, _ = normalize_and_bias_data(self.X, X)
+            _, X, _ = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             if self.use_pca and self.variance < 1.0:
                 X = self.apply_pca(X)
 

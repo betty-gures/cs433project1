@@ -9,11 +9,11 @@ from visualizations import plot_class_distribution_by_group
 
 # Configurations
 NUM_SAMPLES = int(1e6)
-
+COL_IDS = {"race": 245, "sex": 50, "age": 247} # taken from the dataset documentation
 x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = get_raw_data()
-race = x_train_orig[:, 245]
-sex = x_train_orig[:, 50]
-age = x_train_orig[:, 247]
+race = x_train_orig[:, COL_IDS["race"]]
+sex = x_train_orig[:, COL_IDS["sex"]]
+age = x_train_orig[:, COL_IDS["age"]]
 
 # Create distribution plots
 plot_class_distribution_by_group(y_train_orig, race, save_dir="results/dist_race.pdf")
@@ -64,7 +64,7 @@ def format_results(results, value_names):
     latex_table = "\n".join(latex)
     return latex_table
 
-
+# Run the three experiments one after another
 results = run_experiment(race)
 value_names = {"1.0": "White", "2.0": "Black", "3.0": "Hispanic", "4.0": "Other", "5.0": "Multiracial", "nan": "Unknown"}
 with open("results/fairness_race.txt", "w", encoding="utf-8") as f:

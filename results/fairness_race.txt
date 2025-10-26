@@ -6,12 +6,12 @@
 \toprule
 \textbf{Attribute} & \textbf{F1-score (\%)}\
 \midrule
-White & 42.4±0.4\\
-Black & 38.0±1.8\\
-Hispanic & 36.3±3.6\\
-Other & 41.1±4.9\\
-Multiracial & 46.6±5.1\\
-Unknown & 42.0±5.2\\
+White & 43.2±0.5\\
+Black & 39.1±1.3\\
+Hispanic & 38.4±0.9\\
+Other & 44.3±2.0\\
+Multiracial & 49.9±4.3\\
+Unknown & 43.8±4.8\\
 \bottomrule
 \end{tabular}
 \end{table}
