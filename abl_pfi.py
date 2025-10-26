@@ -1,10 +1,8 @@
 from collections import defaultdict
 import os
-import sys
 
 import numpy as np
 
-sys.path.append("../")
 from implementations import sigmoid
 from metrics import f_score
 from models import OrdinaryLeastSquares, test_val_split

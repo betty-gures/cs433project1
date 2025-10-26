@@ -1,4 +1,7 @@
 # Predicting Cardiovascular Diseases from Clinical and Lifestyle Data
+
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 This is the code repository for our Project 1 in the EPFL Course CS-433 "Machine Learning".
 
 # Authors
@@ -23,23 +26,7 @@ The project task was to implement and test machine learning methods to predict c
 |   |-- dataset.zip
 |   `-- sample-submission.csv
 |-- grading_tests
-|   |-- INSTRUCTIONS.md
-|   |-- conftest.py
-|   |-- environment.yml
-|   `-- test_project1_public.py
 |-- notebooks
-|   |-- 001_implementations.ipynb
-|   |-- 002_dataset_exploration.ipynb
-|   |-- 003_preprocessing.ipynb
-|   |-- 004_logistic_regression.ipynb
-|   |-- 005_model_selection.ipynb
-|   |-- 006_ablations.ipynb
-|   |-- 007_neural_networks.ipynb
-|   |-- 008_fairness.ipynb
-|   |-- 009_least_squares.ipynb
-|   |-- 010_SVM.ipynb
-|   |-- 011_kNN.ipynb
-|   |-- 012_PCA.ipynb
 |-- results
 |   |-- KNearestNeighbors.txt
 |   |-- LinearSVM.txt
@@ -64,25 +51,11 @@ The project task was to implement and test machine learning methods to predict c
 `-- visualizations.py
 ```
 
-
-data 
-    The files in the data folder, represent the columns from some of the manual processes we did for feature selection in google docs 
-    - missing_values.txt
-    - variable_type.txt
-    - feature_names.csv
-    - missing_percentages.csv
-
-notebooks 
-    These are messy development spaces, after which we move the code out into files for reuse
-
-models.py
-    Made of classes that represent the different models.
-
 ## File description
 - `data/metadata/` contains metadata about the dataset (feature names, missing values, variable types, etc.)
 - `data/submissions`  contains all the submissions we made to AICrowd
 - `data/dataset.zip` is the dataset provided by AICrowd in .zip format
-- `grading_tests/` contains the tests for grading the project
+- `grading_tests/` contains the tests and conda environment for grading the project
 - `notebooks/` contains Jupyter notebooks for exploration and quick experimentation (not relevant for grading)
 - `results/` contains results from the experiments (plots, model performances, etc.)
 - `abl_pfi.py` script to run explainability experiment (permutation feature importance)
@@ -104,16 +77,19 @@ models.py
     - `seaborn=0.13.2`
 
 # Setup
-1. Setup conda environment:
+Setup conda environment:
 ```bash
 conda env create -f environment.yml
-conda activate cs433project1
+conda activate project1-dev
 ```
 
 # Usage
 
 ## Final predictions
-Model predictions using `run.py`
+Model predictions using `python run.py`.
+
+Settings:
+- 
 
 ## Dataset Exploration
 Run dataset exploration using `notebooks/002_dataset_exploration.ipynb` and see output in `results/feature_statistics_overview.pdf`

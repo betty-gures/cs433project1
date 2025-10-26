@@ -1,8 +1,16 @@
+# Plotting functions for model evaluation and fairness analysis
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 def plot_roc(score, y, steps=101):
+    """Plots an ROC curve
+
+    Args:
+        score: np.ndarray of shape (n_samples,), predicted scores
+        y: np.ndarray of shape (n_samples,), true binary labels (0 or 1)
+        steps: int, number of threshold steps between 0 and 1
+    """
     thresholds = np.linspace(0, 1, steps)
     tpr = []
     fpr = []
@@ -33,6 +41,12 @@ def plot_roc(score, y, steps=101):
     plt.show()
 
 def plot_losses(train_losses, val_losses):
+    """Plots training and validation losses over iterations.
+    Args:
+        train_losses: list of training losses
+        val_losses: list of validation losses
+    """
+    plt.figure()
     plt.plot(train_losses, label="train loss")
     plt.plot(val_losses, label="val loss")
     plt.xlabel("Iteration")
@@ -40,10 +54,19 @@ def plot_losses(train_losses, val_losses):
     plt.legend()
     plt.show()
 
-def plot_class_distribution_by_group(y, group_attr, annotate=True):
+def plot_class_distribution_by_group(y, group_attr, annotate=True, save_dir=None):
+    """
+    Plots the class distribution of y segmented by group_attr.
+    Args:
+        y: np.ndarray of shape (n_samples,), binary class labels (0 or 1)
+        group_attr: np.ndarray of shape (n_samples,), categorical group attribute
+        annotate: bool, whether to annotate bars with relative frequencies
+        save_dir: str or None, if provided, saves the plot to this directory
+    """
     mask = ~np.isnan(group_attr)
     group_clean = group_attr[mask]
     y_clean = y[mask]
+    plt.figure()
     g = sns.histplot(x=group_clean, hue=y_clean, multiple="stack", binwidth=0.5)
 
     if annotate:
@@ -63,3 +86,7 @@ def plot_class_distribution_by_group(y, group_attr, annotate=True):
                     )
                     i+=1
 
+    if save_dir:
+        plt.savefig(save_dir)
+    plt.show()
+    plt.close()

@@ -3,7 +3,6 @@ from typing import List, Any
 
 import numpy as np
 from metrics import f_score, auc_roc
-from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors
 
 @dataclass
 class CVResult:
@@ -65,7 +64,7 @@ def cross_validation(x_train, y_train, model_class, num_folds=5, seed=42, verbos
         print(f"Starting fold {fold_idx + 1}/{num_folds} with {train_idx.shape[0]} samples")
  
         model = model_class(**model_args) # initialize a new model for each fold
-        model.hyperparameter_tuning(x_train[train_idx], y_train[train_idx], f_score, verbose=verbose)
+        train_results = model.hyperparameter_tuning(x_train[train_idx], y_train[train_idx], f_score, verbose=verbose)
         model.train(x_train[train_idx], y_train[train_idx]) # train the model
         y_probs = model.predict(x_train[val_idx], save_scores=True, scores=True)
         y_val_pred = model.predict(x_train[val_idx], use_scores=True)

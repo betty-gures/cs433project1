@@ -236,6 +236,15 @@ class LogisticRegression():
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
         """
+        Tune hyperparameters using a validation set.
+        Args:
+            X: np.ndarray of shape (N, D)
+            y: np.ndarray of shape (N, ), with values in {0, 1}
+            metric: function(pred, true) -> float, metric to optimize
+            verbose: bool, if True print progress messages
+        Returns:
+            train_losses: list of training losses
+            val_losses: list of validation losses
         """
         validate_data(X, y)
 
@@ -370,6 +379,8 @@ def hinge_loss(y, X, w, _lambda=1.0, include_reg=True):
         return np.mean(hinge)
 
 class LinearSVM:
+    """Linear Support Vector Machine for binary classification (0/1 labels) using Gradient Descent on the hinge loss.
+    """
     def __init__(self, _lambda=1.0, lr=0.1, metric=None, max_iters=1000, patience=10, seed=42, squared_features=False):
         # hyperparameters
         self._lambda = _lambda
@@ -383,12 +394,31 @@ class LinearSVM:
         self.w = None
 
     def gradient_step(self, X, y):
+        """Perform a single gradient step on the hinge loss.
+        Args:
+            X: np.ndarray of shape (N, D)
+            y: np.ndarray of shape (N, ), with values in {-1, 1}
+
+        Returns:
+            None
+        """
+
         margins = y * (X @ self.w) # compute margins
         mask = margins < 1 # find misclassified samples
         dw = self._lambda * self.w - np.mean((mask[:, None] * y[:, None]) * X, axis=0) # gradient calculation
         self.w -= self.lr * dw # gradient descent update
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
+        """Tune hyperparameters using a validation set.
+        
+        Args:
+            X: np.ndarray of shape (N, D)
+            y: np.ndarray of shape (N, ), with values in {0, 1}
+            metric: function(pred, true) -> float, metric to optimize
+            verbose: bool, if True print progress messages
+
+        Returns:
+            train_losses: dict mapping (_lambda, lr) to list of training losses"""
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
         self.X = X_train
         X_train, X_val_biased, _ = normalize_and_bias_data(X_train, X_val, squared_features=self.squared_features)
@@ -439,6 +469,14 @@ class LinearSVM:
         return train_losses, val_losses
 
     def train(self, X, y):
+        """Train the SVM using gradient descent.
+        Args:
+            X: np.ndarray of shape (N, D)
+            y: np.ndarray of shape (N, ), with values in {0, 1}
+        
+        Returns:
+            None
+        """
         validate_data(X, y)
 
         self.X = X # remember X for normalization during prediction
@@ -450,9 +488,18 @@ class LinearSVM:
             self.gradient_step(X, y)  # retrain on full data
 
     def predict(self, X, scores=False, save_scores=False, use_scores=False):
+        """
+        Predict the labels for given data points.
+        Args:
+            X: np.ndarray of shape (N,D)
+            scores: bool, if True return raw scores instead of binary predictions
+            save_scores: bool, if True save the raw scores
+            use_scores: bool, if True use saved scores instead of recomputing
+        Returns:
+            np.ndarray of shape (N, ) with predicted labels (0 or 1) or scores
+        """
         if use_scores:
             preds = self.scores
-            print("use saved scores")
         else:
             _, X, _ = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             preds = X @ self.w

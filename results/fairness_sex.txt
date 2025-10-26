@@ -1,0 +1,13 @@
+\begin{table}[t]
+\caption{Estimated performance metrics (\%±STD) by protected attribute.}
+\label{tab:results}
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Attribute} & \textbf{F1-score (\%)}\
+\midrule
+Male & 44.6±0.6\\
+Female & 38.3±0.7\\
+\bottomrule
+\end{tabular}
+\end{table}
