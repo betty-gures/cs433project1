@@ -44,7 +44,7 @@ def plot_class_distribution_by_group(y, group_attr, annotate=True):
     mask = ~np.isnan(group_attr)
     group_clean = group_attr[mask]
     y_clean = y[mask]
-    g = sns.histplot(x=group_clean, hue=y_clean, multiple="stack", stat="probability")
+    g = sns.histplot(x=group_clean, hue=y_clean, multiple="stack", binwidth=0.5)
 
     if annotate:
         totals = np.array([bar.get_height() for container in g.containers for bar in container if bar.get_height() > 0]).reshape(2, -1).sum(axis=0)

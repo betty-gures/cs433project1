@@ -87,9 +87,8 @@ def validate_features(X, _lambda=0):
     cond_number = np.linalg.cond(xtx + _lambda * np.eye(X.shape[1]))
     print(f"Condition number of X^T X: {cond_number:.2e}")
 
-    # Optional: warn if it's too large
     if cond_number > 1e10:
-        print("⚠️ Warning: X^T X is ill-conditioned — check for multicollinearity or redundant features.")
+        print("Warning: X^T X is ill-conditioned — check for multicollinearity or redundant features.")
 
 
 ### MODELS
@@ -140,7 +139,8 @@ class OrdinaryLeastSquares():
         """
         validate_data(X, y)
         self.X = X
-        X = normalize_and_bias_data(X, squared_features=self.squared_features)
+        X, _ = normalize_and_bias_data(X, squared_features=self.squared_features)
+        validate_features(X, self._lambda)
 
         # self.sample_weights = get_sample_weights(y, weighting=self.weighting)
         # w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]  # shape (N,1)
@@ -178,11 +178,11 @@ class OrdinaryLeastSquares():
         if use_scores:
             preds = self.scores
         else:
-            _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
+            _, X, _ = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             preds = X @ self.weights
         if save_scores: self.scores = preds
         if scores: return sigmoid(preds) # non-parametric Platt scaling
-        return (preds >= self.decision_threshold).astype(int)
+        return (sigmoid(preds) >= self.decision_threshold).astype(int)
 
 
 class LogisticRegression():
@@ -243,12 +243,12 @@ class LogisticRegression():
 
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
         self.X = X_train
-        X_train, X_val_biased = normalize_and_bias_data(X_train, X_val, squared_features=self.squared_features)
+        X_train, X_val_biased, _ = normalize_and_bias_data(X_train, X_val, squared_features=self.squared_features)
        
         
         self.sample_weights = get_sample_weights(y_train, weighting=self.weighting)
 
-        lambdas = [0, 1e-4, 1e-3, 1e-2, 1e-1] 
+        lambdas = [0, 1e-4, 1e-3] #, 1e-2, 1e-1] 
 
         metric_scores, num_iters, thresholds = {}, {}, {}
         train_losses, val_losses = {}, {}
@@ -324,7 +324,7 @@ class LogisticRegression():
         validate_data(X, y)
 
         self.X = X # remember X for normalization during prediction
-        X = normalize_and_bias_data(X, squared_features=self.squared_features)
+        X, _ = normalize_and_bias_data(X, squared_features=self.squared_features)
 
         validate_features(X, self._lambda)
 
@@ -351,7 +351,7 @@ class LogisticRegression():
         if use_scores:
             probs = self.scores
         else:
-            _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
+            _, X, _ = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             probs = sigmoid(X @ self.weights)
         if save_scores: self.scores = probs
         if scores: return probs
@@ -391,7 +391,7 @@ class LinearSVM:
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y)
         self.X = X_train
-        X_train, X_val_biased = normalize_and_bias_data(X_train, X_val, squared_features=self.squared_features)
+        X_train, X_val_biased, _ = normalize_and_bias_data(X_train, X_val, squared_features=self.squared_features)
 
         lambdas = [0.25, 0.5, 1.0, 2.0, 4.0]
         lrs = [0.01, 0.1]
@@ -442,7 +442,7 @@ class LinearSVM:
         validate_data(X, y)
 
         self.X = X # remember X for normalization during prediction
-        X = normalize_and_bias_data(X, squared_features=self.squared_features)
+        X, _ = normalize_and_bias_data(X, squared_features=self.squared_features)
         y = np.where(y <= 0, -1, 1)  # ensure labels are -1 or 1
         
         self.w = np.zeros(X.shape[1])  # initialize weights
@@ -454,7 +454,7 @@ class LinearSVM:
             preds = self.scores
             print("use saved scores")
         else:
-            _, X = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
+            _, X, _ = normalize_and_bias_data(self.X, X, squared_features=self.squared_features)
             preds = X @ self.w
         if save_scores: self.scores = preds
         if scores: return sigmoid(preds) # non-parametric Platt scaling
@@ -478,7 +478,7 @@ class KNearestNeighbors:
         print(X_val.shape)
         self.X = X_train
         self.y_train = y_train
-        X_train = normalize_and_bias_data(X_train)
+        X_train, _ = normalize_and_bias_data(X_train)
         
         # find optimal K and threshold on validation set
         base_k = min(0.1 * X_train.shape[0], np.sqrt(X_train.shape[0]))
@@ -520,7 +520,7 @@ class KNearestNeighbors:
 
         validate_data(X, y)
         self.X = X
-        X_train = normalize_and_bias_data(X)
+        X_train, _ = normalize_and_bias_data(X)
         if self.use_pca and self.variance < 1.0:
             X_train, apply_pca = pca(X_train, self.variance)
             self.apply_pca = apply_pca
@@ -540,7 +540,7 @@ class KNearestNeighbors:
         if precomputed_scores is not None:
             probs = precomputed_scores
         else:
-            _, X = normalize_and_bias_data(self.X, X)
+            _, X, _ = normalize_and_bias_data(self.X, X)
             if self.use_pca and self.variance < 1.0:
                 X = self.apply_pca(X)
 

@@ -1,3 +1,4 @@
+# Fbeta score and AUROC implementations
 import numpy as np
 
 def f_score(pred, true, beta=1):
@@ -8,6 +9,8 @@ def f_score(pred, true, beta=1):
         true: True labels (0 or 1)
         beta: Weighting factor for precision and recall
 
+    Returns:
+        float, Fbeta score
     """
     assert np.all((pred == 0) | (pred == 1)) and np.all((true == 0) | (true == 1)), "pred and y must be binary (0 or 1)"
     tp = np.sum((pred == 1) & (true == 1))

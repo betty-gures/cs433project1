@@ -9,7 +9,7 @@ from preprocessing import preprocess
 
 ## configuration
 out_dir = "results"
-one_hot_encoding=True
+one_hot_encoding=False
 num_samples = int(1e6)
 
 model_settings = [
@@ -20,7 +20,7 @@ model_settings = [
 ]
 
 # Loading data
-x_train, _, y_train, _ = preprocess(one_hot_encoding=one_hot_encoding)
+x_train, _, y_train, *_ = preprocess(one_hot_encoding=one_hot_encoding)
     
 for model in model_settings:
     print(f"Cross-validating model: {model['model_class'].__name__}")

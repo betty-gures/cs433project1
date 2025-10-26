@@ -1,0 +1,9 @@
+Model: LinearSVM
+
+cv_results repr:
+CVResult(f1_scores=[np.float64(0.3499350730951284), np.float64(0.34627115103405054), np.float64(0.3492957746478873), np.float64(0.3500734214390602), np.float64(0.35264110580878727)], f2_scores=[np.float64(0.5092039497744727), np.float64(0.505156398566448), np.float64(0.5064020947942441), np.float64(0.5044862028102252), np.float64(0.5101409255379927)], auc_rocs=[np.float64(0.8282589062272369), np.float64(0.8265292303252272), np.float64(0.8265297738160287), np.float64(0.8287659266479148), np.float64(0.8259147283983936)], train_result=[])
+
+Aggregated metrics:
+Average F1-score: 35.0% ± 0.2
+Average F2-score: 50.7% ± 0.2
+Average AUC-ROC: 82.7% ± 0.1
