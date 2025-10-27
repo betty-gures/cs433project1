@@ -15,11 +15,30 @@ num_seeds = 5
 initial_seed = 42
 
 def get_f1(model, X, y):
+    """Get F1 score of model on data X, y.
+    
+    Args:
+        model: trained model
+        X: input data
+        y: true labels
+    Returns:
+        F1 score as float
+    """
     preds = sigmoid(X @ model.weights)
     preds = (preds >= model.decision_threshold).astype(int)
     return f_score(preds, y).item()
 
 def get_weight_stats(model, X, y, feature_names, topk=100):
+    """Get permutation feature importances for the topk features by absolute weight.
+    Args:
+        model: trained model
+        X: input data
+        y: true labels
+        feature_names: list of feature names
+        topk: number of top features to consider
+    Returns:
+        dict mapping feature name to (relative delta F1, weight)
+    """
     original_f1 = get_f1(model, X, y)
     print(f"Original F1: {original_f1}")
     topk_idx = np.argsort(np.abs(model.weights))[-topk:][::-1]
@@ -31,12 +50,14 @@ def get_weight_stats(model, X, y, feature_names, topk=100):
         deltas[feature_names[idx]] = (rel_delta, model.weights[idx])
     return deltas
 
-
+# preprocessing
 x_train, _, y_train, _, feature_names = preprocess()
 
+# drawing seeds from initial seed
 np.random.seed(initial_seed)
 seeds = list(np.random.randint(0, 2**16 - 1, size=num_seeds))
 
+# training model and getting PFI
 all_deltas = []
 for seed in seeds:
     print(f"Using seed {seed}...")
@@ -71,7 +92,7 @@ print("Feature importances (by decrease in F1 when permuted):")
 for fname, (mean, std) in deltas.items():
     print(f"Feature {fname}: ΔF1 = {mean} ± {std}, w: {weights[fname][0]} ± {weights[fname][1]}")
 
-
+# write results to file
 with open(out_path, "w", encoding="utf-8") as f:
     for fname, (mean, std) in deltas.items():
         w_mean, w_std = weights.get(fname, (None, None))

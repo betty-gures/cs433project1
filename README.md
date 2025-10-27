@@ -67,6 +67,7 @@ The project task was to implement and test machine learning methods to predict c
 - `model_selection.py` functions cross-validation and group-based scoring
 - `preprocessing.py` functions for data preprocessing (loading data, handling missing values, removing duplicate columns, etc.)
 - `run.py` script to run the entire pipeline and produce the final AICrowd submission
+- `visualizations.py` functions for visualizations (ROC curve, loss curves, etc)
 
 
 # Requirements
@@ -88,8 +89,14 @@ conda activate project1-dev
 ## Final predictions
 Model predictions using `python run.py`.
 
-Settings:
-- 
+Command line arguments:
+```
+ --model {ordinary_least_squares,logistic_regression,linear_svm,k_nearest_neighbors}
+                        The model to use for training and evaluation.
+  --submission_file_name SUBMISSION_FILE_NAME
+                        Name of the submission file (without dir and file name).
+  --verbose             If set, prints detailed logs during training.
+```
 
 ## Dataset Exploration
 Run dataset exploration using `notebooks/002_dataset_exploration.ipynb` and see output in `results/feature_statistics_overview.pdf`

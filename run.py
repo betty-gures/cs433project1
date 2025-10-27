@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
 
     # Preprocess the data
-    x_train, x_test, y_train, test_ids = preprocess()
+    x_train, x_test, y_train, test_ids, _ = preprocess()
 
     # Initialize and train the model
     model = model_class()
