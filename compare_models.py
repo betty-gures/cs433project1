@@ -49,6 +49,11 @@ def parse_args():
         help="One or more models to run. Defaults to all available models.",
     )
     parser.add_argument(
+        "--no_one_hot_encoding",
+        action="store_true",
+        help="If set, disables one-hot encoding for categorical features.",
+    )
+    parser.add_argument(
         "--num-samples",
         type=int,
         default=int(1e6),
@@ -63,14 +68,13 @@ def main():
 
     print("Starting model comparisons...")
     out_dir = "results"  # Output directory for result text files
-    one_hot_encoding = False  # Toggle for preprocessing; keep consistent across runs
     num_samples = args.num_samples
 
     # Build model configurations from CLI selection(s).
     model_settings = [{"model_class": MODEL_REGISTRY[name]} for name in args.models]
 
     # Loading data
-    x_train, _, y_train, *_ = preprocess(one_hot_encoding=one_hot_encoding)
+    x_train, _, y_train, *_ = preprocess(one_hot_encoding=not args.no_one_hot_encoding)
 
     for model in model_settings:
         print(f"Cross-validating model: {model['model_class'].__name__}")

@@ -155,7 +155,7 @@ def impute_missing_values(train, test):
     return test
 
 
-def normalize_and_bias_data(x_train, x_test=None, squared_features=True, feature_names=None):
+def preprocess_splits(x_train, x_test=None, squared_features=True, feature_names=None):
     """Standardize data and add bias term.
     Args:
         x_train: np.ndarray of shape (N_train, D)

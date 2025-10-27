@@ -6,7 +6,7 @@ import numpy as np
 from implementations import sigmoid
 from metrics import f_score
 from models import OrdinaryLeastSquares, test_val_split
-from preprocessing import preprocess, normalize_and_bias_data
+from preprocessing import preprocess, preprocess_splits
 
 
 os.makedirs("results", exist_ok=True)
@@ -68,7 +68,7 @@ for seed in seeds:
     model.train(X_train_split, y_train_split)
 
     print("Normalizing validation data...")
-    _, X, feature_names_split = normalize_and_bias_data(X_train_split, X_val, squared_features=model.squared_features, feature_names=feature_names)
+    _, X, feature_names_split = preprocess_splits(X_train_split, X_val, squared_features=model.squared_features, feature_names=feature_names)
     print("Calculating permutation feature importances...")
     all_deltas.append(get_weight_stats(model, X, y_val, feature_names_split))
 

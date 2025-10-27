@@ -91,8 +91,9 @@ Model predictions using `python run.py`.
 
 Command line arguments:
 ```
- --model {ordinary_least_squares,logistic_regression,linear_svm,k_nearest_neighbors}
+ --model {ols,logistic_regression,linear_svm,knn}
                         The model to use for training and evaluation.
+  --no_one_hot_encoding     If set, disables one-hot encoding for categorical features.
   --submission_file_name SUBMISSION_FILE_NAME
                         Name of the submission file (without dir and file name).
   --verbose             If set, prints detailed logs during training.
@@ -102,7 +103,7 @@ Command line arguments:
 Run dataset exploration using `notebooks/002_dataset_exploration.ipynb` and see output in `results/feature_statistics_overview.pdf`
 
 ## Model comparisons
-Compare different models using `compare_models.py`
+Compare different models using `compare_models.py`. Has the same arguments as `run.py` without `--submission_file_name`, but allows to run multiple models in one go and performs 5-fold cross-validation.
 
 ## Model ablations
 Run preprocessing and modeling ablations using `notebooks/006_ablations.ipynb` and see output in `results/ablations_sample_size.pdf`
