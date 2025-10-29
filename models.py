@@ -596,3 +596,147 @@ class KNearestNeighbors:
         if save_scores: self.scores = probs
         if scores: return probs
         return (probs >= self.decision_threshold).astype(int)
+    
+
+class DecisionTree:
+    """
+    Lightweight implementation of a binary decision tree (CART) using Gini impurity.
+    Fully NumPy-based and compatible with the existing project pipeline.
+    """
+    def __init__(self, max_depth=6, min_samples_leaf=50, max_features=None, seed=42, squared_features=False):
+        self.max_depth = max_depth
+        self.min_samples_leaf = min_samples_leaf
+        self.max_features = max_features  # if None -> use all features
+        self.rng = np.random.default_rng(seed)
+        self.squared_features = squared_features
+        self.tree_ = None  # list of nodes
+
+    # ----- utilities -----
+    @staticmethod
+    def _gini(y):
+        if y.size == 0: return 0.0
+        p1 = np.mean(y == 1)
+        return 2 * p1 * (1 - p1)  # 1 - (p1^2 + p0^2)
+
+    @staticmethod
+    def _leaf_value(y):
+        # return class-1 probability at leaf
+        return np.mean(y == 1).item() if y.size else 0.0
+
+    def _best_split(self, X, y, feat_idxes):
+        # Returns (best_feature, best_threshold, best_gini, left_mask) or (None, None, None, None)
+        n, d = X.shape
+        base_gini = self._gini(y)
+        best_gain = 0.0
+        best = (None, None, None, None)
+
+        for j in feat_idxes:
+            col = X[:, j]
+            # candidate thresholds: midpoints between sorted unique values (downsample if many)
+            uniq = np.unique(col)
+            if uniq.size < 2: 
+                continue
+            # downsample candidate thresholds for speed
+            if uniq.size > 64:
+                idx = np.linspace(0, uniq.size - 1, 64, dtype=int)
+                uniq = uniq[idx]
+            thr_candidates = (uniq[:-1] + uniq[1:]) * 0.5
+
+            for thr in thr_candidates:
+                left_mask = col <= thr
+                nL = np.sum(left_mask)
+                nR = n - nL
+                if nL < self.min_samples_leaf or nR < self.min_samples_leaf:
+                    continue
+                giniL = self._gini(y[left_mask])
+                giniR = self._gini(y[~left_mask])
+                gini_split = (nL * giniL + nR * giniR) / n
+                gain = base_gini - gini_split
+                if gain > best_gain:
+                    best_gain = gain
+                    best = (j, thr, gini_split, left_mask)
+        return best
+
+    def _build(self, X, y, depth):
+        node = {}
+        # stopping criteria
+        if (depth >= self.max_depth) or (y.size <= 2 * self.min_samples_leaf) or (np.all(y == y[0])):
+            node["type"] = "leaf"
+            node["p1"] = self._leaf_value(y)
+            return node
+
+        d = X.shape[1]
+        feat_idxes = np.arange(d)
+        if self.max_features is not None and self.max_features < d:
+            feat_idxes = self.rng.choice(d, size=self.max_features, replace=False)
+
+        j, thr, _, left_mask = self._best_split(X, y, feat_idxes)
+        if j is None:
+            node["type"] = "leaf"
+            node["p1"] = self._leaf_value(y)
+            return node
+
+        node["type"] = "split"
+        node["j"] = int(j)
+        node["thr"] = float(thr)
+        node["left"] = self._build(X[left_mask], y[left_mask], depth + 1)
+        node["right"] = self._build(X[~left_mask], y[~left_mask], depth + 1)
+        return node
+
+    # ----- public API -----
+    def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
+        # simple grid on depth / min_leaf; pick threshold later as usual
+        X_tr, y_tr, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.2)
+        self.X = X_tr
+        X_tr_p, X_val_p, _ = preprocess_splits(X_tr, X_val, squared_features=self.squared_features)
+
+        grids = []
+        for md in [3, 4, 5, 6, 8, 10]:
+            for ml in [20, 50, 100, 200]:
+                grids.append((md, ml))
+
+        best_score = -1
+        best_params = (self.max_depth, self.min_samples_leaf)
+        best_thr = 0.5
+
+        for md, ml in grids:
+            self.max_depth, self.min_samples_leaf = md, ml
+            # train
+            self.tree_ = self._build(X_tr_p, y_tr, depth=0)
+            # val probs
+            probs = self.predict(X_val, scores=True)
+            thr, _ = find_best_threshold(probs, y_val, metric, verbose=False)
+            preds = (probs >= thr).astype(int)
+            score = metric(preds, y_val)
+            if verbose:
+                print(f"depth={md}, min_leaf={ml} -> score={score:.4f} thr={thr:.2f}")
+            if score > best_score:
+                best_score, best_params, best_thr = score, (md, ml), thr
+
+        self.max_depth, self.min_samples_leaf = best_params
+        self.decision_threshold = best_thr
+        if verbose:
+            print(f"Best: depth={self.max_depth}, min_leaf={self.min_samples_leaf}, thr={self.decision_threshold:.2f}, score={best_score:.4f}")
+        return [], []  # keep API symmetry with others
+
+    def train(self, X, y):
+        validate_data(X, y)
+        self.X = X
+        Xp, _ = preprocess_splits(X, squared_features=self.squared_features)
+        self.tree_ = self._build(Xp, y, depth=0)
+
+    def _predict_row(self, x, node):
+        while node["type"] != "leaf":
+            if x[node["j"]] <= node["thr"]:
+                node = node["left"]
+            else:
+                node = node["right"]
+        return node["p1"]  # probability of class 1
+
+    def predict(self, X, scores=False, save_scores=False, use_scores=False):
+        _, Xp, _ = preprocess_splits(self.X, X, squared_features=self.squared_features)
+        probs = np.array([self._predict_row(row, self.tree_) for row in Xp])
+        if save_scores: self.scores = probs
+        if scores: return probs
+        thr = getattr(self, "decision_threshold", 0.5)
+        return (probs >= thr).astype(int)
