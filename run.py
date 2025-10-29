@@ -36,21 +36,16 @@ if __name__ == "__main__":
         help="If set, prints detailed logs during training.",
     )
     args = parser.parse_args()
-    model_class = {
-        "ordinary_least_squares": OrdinaryLeastSquares,
-        "logistic_regression": LogisticRegression,
-        "linear_svm": LinearSVM,
-        "k_nearest_neighbors": KNearestNeighbors
-    }[args.model]
+    model_class = MODEL_REGISTRY[args.model]
 
 
     # Preprocess the data
     x_train, x_test, y_train, test_ids, _ = preprocess(one_hot_encoding=not args.no_one_hot_encoding)
 
     # Initialize and train the model
-    model = model_class()
+    
     print("Training model...")
-    model = OrdinaryLeastSquares()
+    model = model_class()
     model.hyperparameter_tuning(x_train, y_train, verbose=args.verbose)
     model.train(X=x_train, y=y_train)
 
