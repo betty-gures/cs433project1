@@ -1,0 +1,9 @@
+Model: DecisionTree
+
+cv_results repr:
+CVResult(f1_scores=[np.float64(0.39917200854700857), np.float64(0.4022981248816213), np.float64(0.40272299274716883), np.float64(0.4087333048728426), np.float64(0.41203894145070613)], f2_scores=[np.float64(0.46531539946447475), np.float64(0.4838856656845176), np.float64(0.4765848516789639), np.float64(0.49408746424464034), np.float64(0.4653719878585145)], auc_rocs=[np.float64(0.8434022998030379), np.float64(0.8438845781489132), np.float64(0.8451522912063225), np.float64(0.8461914435640865), np.float64(0.8439804812461673)], train_result=([], []))
+
+Aggregated metrics:
+Average F1-score: 40.5% ± 0.5
+Average F2-score: 47.7% ± 1.1
+Average AUC-ROC: 84.5% ± 0.1

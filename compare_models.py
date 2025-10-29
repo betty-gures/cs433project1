@@ -17,7 +17,7 @@ import os
 
 import numpy as np
 
-from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors
+from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree
 from model_selection import cross_validation
 from preprocessing import preprocess
 
@@ -28,6 +28,7 @@ MODEL_REGISTRY = {
     "logistic_regression": LogisticRegression,
     "linear_svm": LinearSVM,
     "knn": KNearestNeighbors,
+    "decision_tree": DecisionTree,
 }
 
 
