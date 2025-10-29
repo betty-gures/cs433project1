@@ -63,7 +63,14 @@ def remove_duplicate_columns(X_train, X_test=None):
     return X_train_unique, kept_idx
 
 def lazy_load_data():
-    """Lazy load the raw data if not already loaded."""
+    """Lazy load the raw data into memory if not already loaded.
+    
+    Args:
+        None
+        
+    Returns:
+        None
+    """
     if not os.path.exists(dataset_dir):
         with zipfile.ZipFile(base_dir / "data/dataset.zip", 'r') as zip_ref:
             zip_ref.extractall(base_dir / "data")

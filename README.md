@@ -10,7 +10,7 @@ This is the code repository for our Project 1 in the EPFL Course CS-433 "Machine
 - F. Betül Güres
 
 # Summary
-The project task was to implement and test machine learning methods to predict cardiovascular diseases. We found a weighted least squares model with non-parametric Platt scaling best performing, fast and stable to estimate (F1 score: 42.9%). Our project report is inside the repository: [Report](https://github.com/betty-gures/cs433project1/blob/main/report.pdf). More information about the challenge can be found on [AICrowd](https://www.aicrowd.com/challenges/epfl-machine-learning-project-1).
+The project task was to implement and test machine learning methods to predict cardiovascular diseases. We found a weighted least squares model with non-parametric Platt scaling best performing, fast and stable to estimate (F1 score: 42.8%). Our project report is inside the repository: [Report](https://github.com/betty-gures/cs433project1/blob/main/report.pdf). More information about the challenge can be found on [AICrowd](https://www.aicrowd.com/challenges/epfl-machine-learning-project-1).
 
 # File structure
 
@@ -28,15 +28,10 @@ The project task was to implement and test machine learning methods to predict c
 |-- grading_tests
 |-- notebooks
 |-- results
-|   |-- KNearestNeighbors.txt
-|   |-- LinearSVM.txt
-|   |-- LogisticRegression.txt
-|   |-- OrdinaryLeastSquares.txt
-|   |-- ablations_sample_size.pdf
-|   |-- feature_statistics_overview.pdf
-|   `-- pfi.txt
 |-- LICENSE
 |-- README.md
+|-- abl_dataset_size.py
+|-- abl_fairness.py
 |-- abl_pfi.py
 |-- compare_models.py
 |-- environment.yml
@@ -58,6 +53,8 @@ The project task was to implement and test machine learning methods to predict c
 - `grading_tests/` contains the tests and conda environment for grading the project
 - `notebooks/` contains Jupyter notebooks for exploration and quick experimentation (not relevant for grading)
 - `results/` contains results from the experiments (plots, model performances, etc.)
+- `abl_dataset_size.py` script to run dataset size experiment
+- `abl_fairness.py` script to run fairness experiment across demographic groups
 - `abl_pfi.py` script to run explainability experiment (permutation feature importance)
 - `compare_models.py` script to compare different models using 5-fold cross-validation
 - `environment.yml` conda environment file for development (same as grading environment but with ipykernel)
@@ -65,7 +62,8 @@ The project task was to implement and test machine learning methods to predict c
 - `implementations.py` implementations of the algorithms asked for in the project description
 - `metrics.py` implementations of evaluation metrics: Fbeta score and AUROC
 - `model_selection.py` functions cross-validation and group-based scoring
-- `preprocessing.py` functions for data preprocessing (loading data, handling missing values, removing duplicate columns, etc.)
+- `models.py` model implementations: OLS, Logistic Regression, Linear SVM, KNN, Decision Tree 
+- `preprocessing.py` functions for data preprocessing, details see below
 - `run.py` script to run the entire pipeline and produce the final AICrowd submission
 - `visualizations.py` functions for visualizations (ROC curve, loss curves, etc)
 
@@ -91,7 +89,7 @@ Model predictions using `python run.py`.
 
 Command line arguments:
 ```
- --model {ols,logistic_regression,linear_svm,knn}
+ --model {ols,logistic_regression,linear_svm,knn,decision_tree}
                         The model to use for training and evaluation.
   --no_one_hot_encoding     If set, disables one-hot encoding for categorical features.
   --submission_file_name SUBMISSION_FILE_NAME
@@ -106,10 +104,95 @@ Run dataset exploration using `notebooks/002_dataset_exploration.ipynb` and see 
 Compare different models using `compare_models.py`. Has the same arguments as `run.py` without `--submission_file_name`, but allows to run multiple models in one go and performs 5-fold cross-validation.
 
 ## Model ablations
-Run preprocessing and modeling ablations using `notebooks/006_ablations.ipynb` and see output in `results/ablations_sample_size.pdf`
+Run preprocessing and modeling ablations using `notebooks/006_ablations.ipynb`.
+
+## Dataset size and regularization ablation
+Run dataset size experiment using `python abl_dataset_size.py` and see output plot in `results/ablations_sample_size.pdf`
 
 ## Fairness
-Run fairness experiments using `notebooks/008_fairness.ipynb` and see output in `results/fairness.txt`
+Run fairness experiments using `python abl_fairness.py` and see output in `results/fairness_{demographic}.txt`
 
 ## Explainability
 Run permutation feature importance using `python abl_pfi.py` and see output in `results/pfi.txt`
+
+# Preprocessing steps
+
+Details of the preprocessing in `preprocessing.py`.
+
+Split-independent preprocessing in `preprocess()`:
+1. Replace codes that represent missingness with `np.nan`
+2. One-hot encode categorical features (nominal features in `data/metadata/variable_type.txt`)
+
+Split-dependent preprocessing in `preprocess_splits()`:
+1. Impute missing values using mean imputation
+2. Remove handpicked redundant features as configured in `COL_REMOVE_MANUAL`
+3. Remove invariant features
+4. Standardize features to zero mean and unit variance
+5. Squaring ordinal and continuous features
+6. Remove original columns one hot encoded features to prevent multicollinearity
+7. Add a bias term (column of ones)
+8. Remove duplicate features
+
+If the function is a called with a train and test set, the same preprocessing steps are applied to the test set using statistics (mean, std) computed on the training set to remove test data leakage.
+
+# Models
+Explanation of the specifics and tested hyperparameters of the following models in `models.py`:
+
+General structure of all models:
+- `__init__`: initializes the model with hyperparameters
+- `hyperparameter_tuning(X, y, metric, verbose)`: tunes hyperparameters using a validation set split from the training data
+- `train(X, y)`: fits the model to the training data
+- `predict(X)`: predicts class labels for the input data, you can cache scores using the parameter `save_scores=True` for quicker hyperparameter tuning, especially import for kNN
+
+## Weighted Ordinary Least Squares (OLS)
+
+Our custom implementation of linear regression. We apply non-parametric Platt scaling (i.e. the sigmoid function) to convert the regression outputs to class probabilities. If weighting is set, the model multiplies the datapoints with their inverse class frequency weights in the loss function to handle class imbalance. The weights are estimated using `np.linalg.lstsq` for numerical stability in the call of ill-conditioned gram matrices X^TX.
+
+### Hyperparameters:
+- `decision_threshold` [0,1]: threshold to convert least squares output to class labels, if not tuned defaults to 0.5
+- `_lambda` {0, 1e1, 1e2, 1e3, 1e4}: L2 regularization strength, excluding bias term
+- `squared_features` {False, True}: whether to include squared ordinal and continuous features
+- `weighting` {False, True}: use inverse class frequency weights to handle class imbalance
+
+## Logistic Regression
+
+Our custom implementation of logistic regression using full-batch gradient descent optimization. If weighting is set, the model multiplies the datapoints with their inverse class frequency weights in the loss function to handle class imbalance.
+
+### Hyperparameters:
+
+- `decision_threshold` [0,1]: threshold to convert least squares output to class labels, if not tuned defaults to 0.5
+- `gamma` [0, inf]: step size for gradient descent, defaults to 0.1, after we observed the smooth training loss using `plot_losses` from `visualizations.py`
+- `_lambda` {0, 1e-4, 1e-3, 1e-2, 1e-1}: L2 regularization strength, excluding bias term
+- `max_iters` [0-1000]: maximum number of iterations for gradient descent, set to the number of iterations after which the validation loss converged, defaults to 1000
+- `patience` [0-inf]: number of iterations to wait for improvement in validation loss before early stopping, defaults to 25
+- `squared_features` {False, True}: whether to include squared ordinal and continuous features
+- `stopping_threshold` [0, inf]: threshold for early stopping based on the change in loss between iterations, defaults to 1e-4
+- `weighting` {False, True}: use inverse class frequency weights to handle class imbalance
+
+## Linear Support Vector Machine (SVM)
+
+Support Vector Machine estimated using the primal form (Hinge loss) and optimized using full-batch gradient descent.
+
+### Hyperparameters:
+- `_lambda` {0.25, 0.5, 1.0, 2.0, 4.0}: L2 regularization strength, excluding bias term
+- `lr`{0.01, 0.1}: learning rate for gradient descent
+- `squared_features` {False, True}: whether to include squared ordinal and continuous features
+
+## K-Nearest Neighbors (KNN)
+
+KNN classifier using Euclidean distance. We apply PCA for dimensionality reduction before fitting the model to speed up predictions and reduce noise. The number of components is chosen is a hyperparameter, implicitly determined by the explained variance.
+
+### Hyperparameters:
+- `decision_threshold` [0,1]: threshold to convert least squares output to class labels, if not tuned defaults to 0.5
+- `k`: number of neighbors, uses the square root of the number of samples as base and then uses the following fractions and multiples: {1/64, 1/32, 1/16, 1/8, 0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0}
+- `squared_features` {False, True}: whether to include squared ordinal and continuous features
+- `variance` {1/20, 1/10, 1/6, 1/4, 1/2, 0.75, 0.9, 1.0}: cumulative explained variance to determine the number of PCA components
+
+## Decision Tree
+
+Our Decision Tree splits based on Gini impurity and stops splitting when a maximum depth or minimum number of samples per leaf node is reached.
+
+### Hyperparameters:
+- `max_depth` {3, 4, 5, 6, 8, 10}: maximum depth of the decision tree
+- `min_samples_split` {20, 50, 100, 200}: minimum number of leaf nodes after a split
+- `squared_features` {False, True}: whether to include squared ordinal and continuous features

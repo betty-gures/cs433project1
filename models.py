@@ -132,16 +132,9 @@ class OrdinaryLeastSquares():
         self.X = X
         X, _ = preprocess_splits(X, squared_features=self.squared_features)
 
-        # self.sample_weights = get_sample_weights(y, weighting=self.weighting)
-        # w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]  # shape (N,1)
-        # Xw = X * w_sqrt  # multiply each row by sqrt(weight)
-        # yw = y * np.sqrt(self.sample_weights)  # shape (N,)
-        # #self.weights = np.linalg.solve(Xw.T @ Xw, Xw.T @ yw)
-        # self.weights, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
-
+        # Sample weights, are multiplied from the left and right
         self.sample_weights = get_sample_weights(y, weighting=self.weighting)
         w_sqrt = np.sqrt(self.sample_weights)[:, np.newaxis]
-
         Xw = X * w_sqrt
         yw = y * np.sqrt(self.sample_weights)
 
@@ -149,10 +142,11 @@ class OrdinaryLeastSquares():
         D = np.eye(Xw.shape[1])
         D[0, 0] = 0
 
-        # Ridge-augmented least squares
+        # Ridge-augmented least squares: We create "new datapoints" that just reflected 
         X_aug = np.vstack([Xw, self._lambda * D])
         y_aug = np.concatenate([yw, np.zeros(Xw.shape[1])])
 
+        # Weight update
         self.weights, *_ = np.linalg.lstsq(X_aug, y_aug, rcond=None)
 
     def predict(self, X, scores=False, save_scores=False, use_scores=False):
@@ -212,16 +206,6 @@ class LogisticRegression():
         self.gradient = gradient
         assert gradient.shape == self.weights.shape
 
-        # --- Adam optimizer ---
-        # self.t += 1
-        # beta1, beta2, eps = 0.9, 0.9999, 1e-8
-        # #self.m = beta1 * self.m + (1 - beta1) * gradient
-        # self.v = beta2 * self.v + (1 - beta2) * (gradient ** 2)
-        # #m_hat = self.m / (1 - beta1 ** self.t)
-        # v_hat = self.v / (1 - beta2 ** self.t)
-
-        # self.weights -= self.gamma * gradient / (np.sqrt(v_hat) + eps)
-
         self.weights -= self.gamma * gradient
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
@@ -256,9 +240,6 @@ class LogisticRegression():
             self._lambda = _lambda
             if verbose: print(f"Evaluating lambda={self._lambda}")
             self.weights = np.zeros(X_train.shape[1])
-            self.m = np.zeros_like(self.weights)
-            self.v = np.zeros_like(self.weights)
-            self.t = 0
 
             best_val_loss = np.inf
             patience_counter = 0
@@ -289,8 +270,6 @@ class LogisticRegression():
                     print(f"Iter {iter:4d}: "
                           f"loss={val_loss:.4f}")
                
-
-
             if verbose:
                 print(f"train loss={binary_cross_entropy_loss(y_train, X_train, self.weights)}")
                 print(f"val loss={binary_cross_entropy_loss(y_val, X_val_biased, self.weights)}")
@@ -325,9 +304,6 @@ class LogisticRegression():
         X, _ = preprocess_splits(X, squared_features=self.squared_features)
 
         self.weights = np.zeros(X.shape[1])
-        self.m = np.zeros_like(self.weights)
-        self.v = np.zeros_like(self.weights)
-        self.t = 0
         self.sample_weights = get_sample_weights(y, weighting=self.weighting)
         
         for _ in range(self.max_iter):
@@ -499,9 +475,9 @@ class KNearestNeighbors:
     """k-Nearest Neighbors classifier for binary classification (0/1 labels).
     """
     def __init__(self, k=100, metric=None, seed=42, squared_features=False, use_pca=True):
+        self.decision_threshold = 0.5
         self.k = k
         self.metric = metric
-        self.decision_threshold = 0.5
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         self.squared_features = squared_features
@@ -509,6 +485,15 @@ class KNearestNeighbors:
         self.variance = 1.0
 
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
+        """Tune hyperparameters k and explained variance using a validation set.
+        Args:
+            X: np.ndarray of shape (N, D)
+            y: np.ndarray of shape (N, ), with values in {0, 1}
+            metric: function, the metric to optimize
+            verbose: bool, if True prints detailed logs
+        Returns:
+            None
+        """
         X_train, y_train, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.05)
         print(X_val.shape)
         self.X = X_train

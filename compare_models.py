@@ -17,28 +17,17 @@ import os
 
 import numpy as np
 
-from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree
+from helpers import MODEL_REGISTRY
 from model_selection import cross_validation
 from preprocessing import preprocess
 
-
-# Map short, CLI-friendly names to concrete model classes.
-MODEL_REGISTRY = {
-    "ols": OrdinaryLeastSquares,
-    "logistic_regression": LogisticRegression,
-    "linear_svm": LinearSVM,
-    "knn": KNearestNeighbors,
-    "decision_tree": DecisionTree,
-}
-
-
 def parse_args():
     """Parse command-line arguments.
+    Args:
+        None
 
-    Returns
-    -------
-    argparse.Namespace
-        Parsed arguments including: `models` (list[str]) and `num_samples` (int).
+    Returns:
+        argparse.Namespace, Parsed arguments including: `models` (list[str]) and `num_samples` (int).
     """
     parser = argparse.ArgumentParser(description="Compare different models with cross-validation.")
     parser.add_argument(
@@ -63,7 +52,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+if __name__ == "__main__":
     """Entry point for running comparisons and writing results."""
     args = parse_args()
 
@@ -77,15 +66,16 @@ def main():
     # Loading data
     x_train, _, y_train, *_ = preprocess(one_hot_encoding=not args.no_one_hot_encoding)
 
+    # Run cross-validation for each selected model.
     for model in model_settings:
         print(f"Cross-validating model: {model['model_class'].__name__}")
 
-        # kNN can be very slow on large test sets; cap its `max_test` separately.
+        # kNN can be very slow on large test sets, use a smaller test set
         cv_results = cross_validation(
             x_train[:num_samples],
             y_train[:num_samples],
             verbose=True,
-            max_test=20000 if model["model_class"] == KNearestNeighbors else num_samples,
+            max_test=20000 if model['model_class'].__name__ == "KNearestNeighbors" else num_samples,
             **model,
         )
 
@@ -102,8 +92,3 @@ def main():
             f.write(f"Average F1-score: {np.mean(cv_results.f1_scores)*100:.1f}% ± {np.std(cv_results.f1_scores)*100:.1f}\n")
             f.write(f"Average F2-score: {np.mean(cv_results.f2_scores)*100:.1f}% ± {np.std(cv_results.f2_scores)*100:.1f}\n")
             f.write(f"Average AUC-ROC: {np.mean(cv_results.auc_rocs)*100:.1f}% ± {np.std(cv_results.auc_rocs)*100:.1f}\n")
-
-
-if __name__ == "__main__":
-    main()
-    
