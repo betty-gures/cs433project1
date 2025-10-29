@@ -13,7 +13,7 @@ from preprocessing import preprocess, get_raw_data
 from visualizations import plot_class_distribution_by_group
 
 # Configurations
-NUM_SAMPLES = int(1e4)
+NUM_SAMPLES = int(1e6)
 DEMOGRAPHICS = {# taken from the dataset documentation
     "race": {"COL_IDX": 245, "VALUE_NAMES": {"1.0": "White", "2.0": "Black", "3.0": "Hispanic", "4.0": "Other", "5.0": "Multiracial", "nan": "Unknown"}},
     "sex": {"COL_IDX": 50, "VALUE_NAMES": {"1.0": "Male", "2.0": "Female"}},
@@ -75,6 +75,6 @@ for name, config in DEMOGRAPHICS.items():
     plot_class_distribution_by_group(y_train_orig, attr, save_dir=f"results/dist_{name}.pdf")
 
     results = run_experiment(x_train, y_train, attr)
-    continue
+
     with open(f"results/fairness_{name}.txt", "w", encoding="utf-8") as f:
         f.write(format_results(results, config["VALUE_NAMES"]))

@@ -1,6 +1,9 @@
 # Predicting Cardiovascular Diseases from Clinical and Lifestyle Data
 
+![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![Dependencies](https://img.shields.io/badge/Dependencies-NumPy%2C%20Matplotlib%2C%20Seaborn-lightgrey)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+![License](https://img.shields.io/github/license/betty-gures/cs433project1)
 
 This is the code repository for our Project 1 in the EPFL Course CS-433 "Machine Learning".
 
@@ -10,7 +13,7 @@ This is the code repository for our Project 1 in the EPFL Course CS-433 "Machine
 - F. Betül Güres
 
 # Summary
-The project task was to implement and test machine learning methods to predict cardiovascular diseases. We found a weighted least squares model with non-parametric Platt scaling best performing, fast and stable to estimate (F1 score: 42.8%). Our project report is inside the repository: [Report](https://github.com/betty-gures/cs433project1/blob/main/report.pdf). More information about the challenge can be found on [AICrowd](https://www.aicrowd.com/challenges/epfl-machine-learning-project-1).
+The project task was to implement and test machine learning methods to predict cardiovascular diseases. We found a weighted least squares model with non-parametric Platt scaling best performing, fast and stable to estimate (F1 score: 42.8%). Our project report is inside the repository: [Report](https://github.com/CS-433/project-1-ed4ml/blob/main/report.pdf). More information about the challenge can be found on [AICrowd](https://www.aicrowd.com/challenges/epfl-machine-learning-project-1).
 
 # File structure
 
@@ -25,12 +28,11 @@ The project task was to implement and test machine learning methods to predict c
 |   |-- submissions
 |   |-- dataset.zip
 |   `-- sample-submission.csv
-|-- grading_tests
-|-- notebooks
 |-- results
 |-- LICENSE
 |-- README.md
 |-- abl_dataset_size.py
+|-- abl_factors.py
 |-- abl_fairness.py
 |-- abl_pfi.py
 |-- compare_models.py
@@ -50,10 +52,9 @@ The project task was to implement and test machine learning methods to predict c
 - `data/metadata/` contains metadata about the dataset (feature names, missing values, variable types, etc.)
 - `data/submissions`  contains all the submissions we made to AICrowd
 - `data/dataset.zip` is the dataset provided by AICrowd in .zip format
-- `grading_tests/` contains the tests and conda environment for grading the project
-- `notebooks/` contains Jupyter notebooks for exploration and quick experimentation (not relevant for grading)
 - `results/` contains results from the experiments (plots, model performances, etc.)
 - `abl_dataset_size.py` script to run dataset size experiment
+- `abl_factors.py` script to run factor ablation experiments
 - `abl_fairness.py` script to run fairness experiment across demographic groups
 - `abl_pfi.py` script to run explainability experiment (permutation feature importance)
 - `compare_models.py` script to compare different models using 5-fold cross-validation
@@ -84,8 +85,10 @@ conda activate project1-dev
 
 # Usage
 
+The following sections describe how to reproduce our results.
+
 ## Final predictions
-Model predictions using `python run.py`.
+Model predictions using `python run.py`, reported in Table 1 under F1 AI Crowd. Due to private testset, results have to be manually submitted to the above mentioned AI Crowd Challenge.
 
 Command line arguments:
 ```
@@ -98,38 +101,38 @@ Command line arguments:
 ```
 
 ## Dataset Exploration
-Run dataset exploration using `notebooks/002_dataset_exploration.ipynb` and see output in `results/feature_statistics_overview.pdf`
+Reproduce results from the dataset exploration (Figure 1) using `python dataset_exploration.py` and see output in `results/feature_statistics_overview.pdf` .
 
 ## Model comparisons
-Compare different models using `compare_models.py`. Has the same arguments as `run.py` without `--submission_file_name`, but allows to run multiple models in one go and performs 5-fold cross-validation.
+Reproduce Table 1. Compare different models using `python compare_models.py`. Has the same arguments as `run.py` without `--submission_file_name`, but allows to run multiple models in one go and performs 5-fold cross-validation.
 
 ## Model ablations
-Run preprocessing and modeling ablations using `notebooks/006_ablations.ipynb`.
+Reproduces Table 2. Run preprocessing and modeling ablations using `python abl_factors.py` and see the output in the stdout.
 
 ## Dataset size and regularization ablation
-Run dataset size experiment using `python abl_dataset_size.py` and see output plot in `results/ablations_sample_size.pdf`
+Reproduces Figure 2. Run dataset size experiment using `python abl_dataset_size.py` and see output plot in `results/ablations_sample_size.pdf`.
 
 ## Fairness
-Run fairness experiments using `python abl_fairness.py` and see output in `results/fairness_{demographic}.txt`
+Reproduces Table 3. Run fairness experiments using `python abl_fairness.py` and see output in `results/fairness_{demographic}.txt`.
 
 ## Explainability
-Run permutation feature importance using `python abl_pfi.py` and see output in `results/pfi.txt`
+Reproduces Results Section 3) Explainability. Run permutation feature importance using `python abl_pfi.py` and see output in `results/pfi.txt`.
 
 # Preprocessing steps
 
 Details of the preprocessing in `preprocessing.py`.
 
 Split-independent preprocessing in `preprocess()`:
-1. Replace codes that represent missingness with `np.nan`
-2. One-hot encode categorical features (nominal features in `data/metadata/variable_type.txt`)
+1. Replace codes that represent missingness with `np.nan` (values in `data/metadata/missing_values.txt`)
+2. One-hot encode nominal features (in `data/metadata/variable_type.txt`)
 
 Split-dependent preprocessing in `preprocess_splits()`:
 1. Impute missing values using mean imputation
 2. Remove handpicked redundant features as configured in `COL_REMOVE_MANUAL`
 3. Remove invariant features
 4. Standardize features to zero mean and unit variance
-5. Squaring ordinal and continuous features
-6. Remove original columns one hot encoded features to prevent multicollinearity
+5. Squaring ordinal and continuous features (in `data/metadata/variable_type.txt`)
+6. Remove original one hot encoded features to prevent multicollinearity
 7. Add a bias term (column of ones)
 8. Remove duplicate features
 
@@ -156,7 +159,7 @@ Our custom implementation of linear regression. We apply non-parametric Platt sc
 
 ## Logistic Regression
 
-Our custom implementation of logistic regression using full-batch gradient descent optimization. If weighting is set, the model multiplies the datapoints with their inverse class frequency weights in the loss function to handle class imbalance.
+Our custom implementation of logistic regression using full-batch gradient descent optimization. We intentionally did not estimate it using stochastic gradient descent or different optimizers because of the convexity of the loss and the dataset size that allowed for fast estimation on CPU with standard methods. If weighting is set, the model multiplies the datapoints with their inverse class frequency weights in the loss function to handle class imbalance.
 
 ### Hyperparameters:
 

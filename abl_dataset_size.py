@@ -6,16 +6,22 @@ from metrics import f_score
 from preprocessing import preprocess
 
 
-def mean_ci_normal(values):
-    """Return mean and approximate CI half-width using normal distribution (z=1.96)."""
+def mean_ci_normal(values, z = 1.96):
+    """Return mean and approximate CI half-width using normal distribution (z=1.96).
+    
+    Args:
+        values: list or np.ndarray of values
+        z: float, z-score for confidence interval (default: 1.96)
+    Returns:
+        mean: float, mean of values
+        h: float, half-width of 95% confidence interval
+    """
     arr = np.array(values)
     mean = np.mean(arr)
     std = np.std(arr, ddof=1)
     n = len(arr)
-    z = 1.96
     h = z * std / np.sqrt(n)
     return mean, h
-
 
 
 ABLATION_MODEL = OrdinaryLeastSquares
@@ -111,4 +117,4 @@ plt.ylabel("F1 score")
 plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
 plt.grid(True, which="both", ls="--", lw=0.5)
 plt.tight_layout()
-plt.savefig("../results/ablations_sample_size.pdf")
+plt.savefig("results/ablations_sample_size.pdf")

@@ -17,9 +17,18 @@ import os
 
 import numpy as np
 
-from helpers import MODEL_REGISTRY
 from model_selection import cross_validation
+from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree
 from preprocessing import preprocess
+
+# Map short, CLI-friendly names to concrete model classes.
+MODEL_REGISTRY = {
+    "ols": OrdinaryLeastSquares,
+    "logistic_regression": LogisticRegression,
+    "linear_svm": LinearSVM,
+    "knn": KNearestNeighbors,
+    "decision_tree": DecisionTree,
+}
 
 def parse_args():
     """Parse command-line arguments.

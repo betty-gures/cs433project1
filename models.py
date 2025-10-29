@@ -114,9 +114,9 @@ class OrdinaryLeastSquares():
             self.train(X_train, y_train)
 
             scores = self.predict(X_val, scores=True)
-            self.decision_threshold, best_score = find_best_threshold(scores, y_val, metric, verbose=verbose)
+            self.decision_threshold, _ = find_best_threshold(scores, y_val, metric, verbose=verbose)
 
-        return self.decision_threshold, best_score
+        return self.decision_threshold
 
     def train(self, X, y):
         """Fit the model to data using ordinary least squares.

@@ -4,8 +4,6 @@ import csv
 import numpy as np
 import os
 
-from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree
-
 def load_csv_data(data_path, sub_sample=False):
     """
     This function loads the data and returns the respectinve numpy arrays.
@@ -71,12 +69,3 @@ def create_csv_submission(ids, y_pred, name):
         writer.writeheader()
         for r1, r2 in zip(ids, y_pred):
             writer.writerow({"Id": int(r1), "Prediction": int(r2)})
-
-# Map short, CLI-friendly names to concrete model classes.
-MODEL_REGISTRY = {
-    "ols": OrdinaryLeastSquares,
-    "logistic_regression": LogisticRegression,
-    "linear_svm": LinearSVM,
-    "knn": KNearestNeighbors,
-    "decision_tree": DecisionTree,
-}

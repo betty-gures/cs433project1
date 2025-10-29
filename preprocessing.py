@@ -1,23 +1,22 @@
 import hashlib
 import os
 from pathlib import Path
-import sys
 import zipfile
 
 import numpy as np
 
-sys.path.append("../")
 import helpers
 
 base_dir = Path(__file__).parent
 dataset_dir = base_dir / "data/dataset"
+metadata_dir = base_dir / "data/metadata"
 x_train_orig, x_test_orig, y_train_orig, train_ids, test_ids = None, None, None, None, None
 MAX_ONE_HOT_CATEGORIES=100
 COL_REMOVE_MANUAL = np.array([0, 2, 8, 36, 38, 40, 45, 52, 60, 87, 90, 93, 104, 222, 225, 244, 246, 249, 251, 274, 282, 283, 288, 307, 308])
 
 # load and parse missing values
 missing_values = []
-with open(base_dir / "data/metadata/missing_values.txt", "r") as f:
+with open(metadata_dir / "missing_values.txt", "r") as f:
     for line in f:
         line = line.strip().strip('"')  # remove whitespace and surrounding quotes
         # split by comma and convert to int
@@ -26,7 +25,7 @@ with open(base_dir / "data/metadata/missing_values.txt", "r") as f:
 
 # load variable types
 variable_type = []
-with open(base_dir / "data/metadata/variable_type.txt", "r") as f:
+with open(metadata_dir / "variable_type.txt", "r") as f:
     for line in f:
         line = line.strip().strip('"')  # remove whitespace and surrounding quotes
         # split by comma and convert to int
@@ -37,7 +36,7 @@ with open(base_dir / "data/metadata/variable_type.txt", "r") as f:
 
 # load feature names
 feature_names = []
-with open(base_dir / "data/metadata/feature_names.csv", "r") as f:
+with open(metadata_dir / "feature_names.csv", "r") as f:
     for line in f:
         feature_names.append(line.strip())
 feature_names = np.array(feature_names)[1:] # remove ID
@@ -63,7 +62,7 @@ def remove_duplicate_columns(X_train, X_test=None):
     return X_train_unique, kept_idx
 
 def lazy_load_data():
-    """Lazy load the raw data into memory if not already loaded.
+    """Lazy load the raw data into memory if not already loaded. If the data files do not exist, extract them from the zip file.
     
     Args:
         None

@@ -13,9 +13,9 @@ def f_score(pred, true, beta=1):
         float, Fbeta score
     """
     assert np.all((pred == 0) | (pred == 1)) and np.all((true == 0) | (true == 1)), "pred and y must be binary (0 or 1)"
-    tp = np.sum((pred == 1) & (true == 1))
-    fp = np.sum((pred == 1) & (true == 0))
-    fn = np.sum((pred == 0) & (true == 1))
+    tp = np.sum((pred == 1) & (true == 1)) # true positives
+    fp = np.sum((pred == 1) & (true == 0)) # false positives
+    fn = np.sum((pred == 0) & (true == 1)) # false negatives
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     return (1 + beta**2) * (precision * recall) / (beta**2 * precision + recall) if (beta**2 * precision + recall) > 0 else 0

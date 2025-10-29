@@ -57,7 +57,6 @@ def gradient_descent(
         gradient = gradient_function(y, tx, w)
         if verbose:
             print("Gradient: ", gradient)
-
         # update gradient
         w = w - gamma * gradient
 
