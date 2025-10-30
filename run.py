@@ -17,7 +17,7 @@ import os
 import numpy as np
 
 from helpers import create_csv_submission
-from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree
+from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree, NeuralNet
 from preprocessing import preprocess
 
 # Map short, CLI-friendly names to concrete model classes.
@@ -27,6 +27,7 @@ MODEL_REGISTRY = {
     "linear_svm": LinearSVM,
     "knn": KNearestNeighbors,
     "decision_tree": DecisionTree,
+    "neural_net": NeuralNet,
 }
 
 def parse_args():
@@ -42,7 +43,7 @@ def parse_args():
         "--model",
         choices=list(MODEL_REGISTRY.keys()),
         default="ols",
-        help="The model to use for training and evaluation (ols, logistic_regression, linear_svm, knn)."
+        help="The model to use for training and evaluation (ols, logistic_regression, linear_svm, knn, decision_tree, neural_net)."
     )
     parser.add_argument(
         "--no_one_hot_encoding",
@@ -67,17 +68,19 @@ if __name__ == "__main__":
 
     # Initialize and train the model
     model_class = MODEL_REGISTRY[args.model]
-    print("Training model...")
+    print("Tuning hyperparameters...")
     model = model_class()
     model.hyperparameter_tuning(x_train, y_train, verbose=args.verbose)
+    print("Training model...")
     model.train(X=x_train, y=y_train)
 
     # Make predictions on the test set
     predictions = model.predict(x_test)
-
+    print("Making predictions...")
     # Convert to -1 and 1
     predictions = np.where(predictions == 1, 1, -1)
 
     # Create submission file
     os.makedirs("data/submissions", exist_ok=True)
+    print("Creates a submission file...")
     create_csv_submission(test_ids, predictions, f"data/submissions/{args.submission_file_name}.csv")

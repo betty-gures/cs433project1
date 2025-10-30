@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from itertools import product
 from typing import List
+from math import floor
 
 import numpy as np
 
@@ -79,6 +80,9 @@ def get_sample_weights(y, weighting=False):
 def validate_data(X, y):
     assert set(np.unique(y)).issubset({0, 1}), "y must be in {0, 1}"
     assert X.shape[0] == y.shape[0], "X and y must have the same number of samples"
+
+def ReLU(Z):
+    return np.maximum(0, Z)
     
 
 
@@ -725,3 +729,296 @@ class DecisionTree:
         if scores: return probs
         thr = getattr(self, "decision_threshold", 0.5)
         return (probs >= thr).astype(int)
+
+
+# i know its ugly, but when moving stuff over from my notebook, i moved my preprocessing into my class to not mess around with the existing pipeline
+class NeuralNet:
+    
+    # Output size will be 1 given it is a binary classification
+    def __init__(self):
+        self.layer_dims = None
+        self.L = None
+        self.learning_rate = None
+        self.batch_size = None
+        self.params = {}
+        self.patience = None
+        self.hyperparameter_log = []
+        self._mean = None
+        self._std = None
+        
+    # note, X assumes shape (D, N) to perform multiple at the same time, returns logits of shape (1, N)
+    def forward_propagation(self, X):
+        cache = [] # need to store the history of all activations for backprop
+
+        A = X # since the first layer is already normalised
+        Z = X # just tmp
+
+        for i in range(1, self.L):
+            A_prev = A
+            Z = np.dot(self.params[f"W{i}"], A_prev) + self.params[f"b{i}"]
+            cache.append((A_prev, self.params[f"W{i}"], Z))
+            if (i != self.L - 1): A = ReLU(Z)
+
+        return Z, cache
+    
+    def predict(self, X, scores=False, save_scores=False, use_scores=False):
+
+        
+        # NaNs ..
+        col_means = np.nanmean(X, axis=0)
+        nan_mask = np.isnan(X)
+        X = X.copy()
+        for j in range(X.shape[1]):
+            if nan_mask[:, j].any():
+                X[nan_mask[:, j], j] = col_means[j]
+        
+        X_norm = (X - self._mean) / self._std
+        X_t = X_norm.T  # (D, N)
+        
+        Z, _ = self.forward_propagation(X_t)
+        
+        if scores:
+            return sigmoid(Z).flatten()  # (N,)
+        return (Z > 0).astype(int).flatten()  # (N,)
+    
+    def reinitialise_params(self):
+        self.params = {}
+        for i in range(1, self.L): # start from 1, since 0 is input layer
+                # Each column in weights matrix represents weights for one neuron, and small randomisation is necessary to break symmetry
+                self.params[f"W{i}"] = np.random.randn(self.layer_dims[i], self.layer_dims[i-1]) * 0.01 # shape (curr, prev)
+                self.params[f"b{i}"] = np.zeros((self.layer_dims[i], 1)) # shape (curr, 1)
+
+    def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
+        # X: (N, D), y: (N,) 
+        
+        # NaNs ..
+        col_means = np.nanmean(X, axis=0)
+        nan_mask = np.isnan(X)
+        X = X.copy()
+        for j in range(X.shape[1]):
+            X[nan_mask[:, j], j] = col_means[j]
+        
+        # Standardisation
+        self._mean = X.mean(axis=0)
+        self._std = X.std(axis=0)
+        self._std[self._std == 0] = 1
+        X_norm = (X - self._mean) / self._std
+        
+        # Split into train and validation
+        split_idx = int(0.8 * X.shape[0])
+        perm = np.random.permutation(X.shape[0])
+        X_norm, y = X_norm[perm], y[perm]
+        
+        X_train = X_norm[:split_idx]
+        y_train = y[:split_idx]
+        X_val = X_norm[split_idx:]
+        y_val = y[split_idx:]
+        
+        # Transpose to (D, N) for internal neural net format
+        X_train_t = X_train.T
+        X_val_t = X_val.T
+        y_train_t = y_train.reshape(1, -1)
+        y_val_t = y_val.reshape(1, -1)
+        
+        # Store validation data for use during training
+        self._x_val = X_val_t
+        self._y_val = y_val_t
+        
+        D = X_train_t.shape[0]
+
+        # In layer_dims, we have [input_size, hidden_sizes ..., output_size]
+        self.layer_dims = [D, 16, 8, 1]
+        self.L = len(self.layer_dims)
+        self.learning_rate = 0.01
+
+        layers = [[D, 16, 8, 1]]
+        batch_sizes = [32]
+        learning_rates = [0.001]
+        patiences = [10]
+
+        # wayyyyy to slow ... 
+        # layers = [[D, 128, 1], [D, 16, 8, 1], [D, 32, 16, 1]]
+        # batch_sizes = [16, 32]
+        # learning_rates = [0.01, 0.001]
+        # patiences = [3, 5, 10]
+
+        for layer in layers:
+            self.layer_dims = layer
+            self.L = len(self.layer_dims)
+            self.reinitialise_params()
+
+            for batch_size in batch_sizes:
+                self.batch_size = batch_size
+
+                for learning_rate in learning_rates:
+                    self.learning_rate = learning_rate
+
+                    for patience in patiences:
+                        self.patience = patience
+
+                        print(f"layers: {self.layer_dims}, batch size: {self.batch_size}, learning rate: {self.learning_rate}, patience: {self.patience}")
+                        costs, test_costs, _ = self._train_internal(X_train_t, y_train_t)
+
+                        y_pred = self.predict(X_val)
+                        f1 = metric(y_pred, y_val)
+
+                        self.hyperparameter_log.append({
+                            # "final_test_cost": test_costs[-1], # accidentally optimised for cost
+                            "f1": f1,
+                            "layers": self.layer_dims,
+                            "batch_size": self.batch_size,
+                            "learning_rate": self.learning_rate,
+                            "patience": self.patience,
+                        })
+
+                        self.reinitialise_params()
+
+        self.hyperparameter_log.sort(key=lambda x: x["f1"])
+        best_hyperparams = self.hyperparameter_log[-1] 
+
+        self.layer_dims = best_hyperparams["layers"]
+        self.L = len(self.layer_dims)
+        self.reinitialise_params()
+        self.learning_rate = best_hyperparams["learning_rate"]
+        self.batch_size = best_hyperparams["batch_size"]
+        self.patience = best_hyperparams["patience"]
+
+    def _train_internal(self, X, Y):
+        # X: (D, N)
+        # Y: (1, N)
+        N = X.shape[1]
+        batch_size = self.batch_size
+
+        # oversampling the minority class due to the bias in the dataset
+        ratio = int(floor(np.sum(Y == 0) / np.sum(Y == 1)))
+        mask_0 = (Y[0] == 0)
+        mask_1 = (Y[0] == 1)
+        x_zeros = X[:, mask_0]
+        x_ones = X[:, mask_1]
+        y_zeros = Y[:, mask_0]
+        y_ones = Y[:, mask_1]
+        x_ones_oversampled = np.tile(x_ones, (1, ratio))
+        y_ones_oversampled = np.tile(y_ones, (1, ratio))
+        X = np.concatenate([x_zeros, x_ones_oversampled], axis=1)
+        Y = np.concatenate([y_zeros, y_ones_oversampled], axis=1)
+
+        # need to do another permutation so it is not just ordered as zeros then ones
+        train_permutation = np.random.permutation(X.shape[1])
+        X = X[:, train_permutation]
+        Y = Y[:, train_permutation]
+
+        cost_sample_rate_in_epochs = 1
+        costs = []
+        test_costs = []
+
+        max_epochs= 100
+        patience = self.patience # how many epochs to wait before giving up
+        patience_counter = 0 
+
+        for i in range(max_epochs): 
+            # need to do some shuffling to stop memorisation and overfitting
+            permutation = np.random.permutation(N)
+            X_shuffled = X[:, permutation]
+            Y_shuffled = Y[:, permutation]
+
+            for j in range(int(np.ceil(N/batch_size))):
+                start = j * batch_size
+                end = min((j + 1) * batch_size, N)
+
+                X_batch = X_shuffled[:, start:end]
+                Y_batch = Y_shuffled[:, start:end]
+                real_batch_size = end - start
+
+                # 1. for each batch perform forward propagation (we don't need to find the cross entropy loss since it works with derivatives)
+                Z, cache = self.forward_propagation(X_batch)
+                A = sigmoid(Z) 
+                # C = binary_cross_entropy_loss(Y_batch, A)
+
+                dA_prev = None
+                for l in range(self.L - 1, 0, -1):
+                    # 2. backprop formulas condensed
+                    A_prev, W, Z = cache[l-1]
+
+                    is_last_layer = l == self.L - 1
+                    dZ = A - Y_batch if is_last_layer else dA_prev * (Z > 0).astype(int) # this last term is the derivate (kind of) of ReLU
+                    dW = (1 / real_batch_size) * np.dot(dZ, A_prev.T)
+                    db = (1 / real_batch_size) * np.sum(dZ, axis=1, keepdims=True)
+                    
+                    dA_prev = np.dot(W.T, dZ)
+
+                    # 3. Update weights and biases of the network
+                    self.params[f"W{l}"] = self.params[f"W{l}"] - self.learning_rate * dW
+                    self.params[f"b{l}"] = self.params[f"b{l}"] - self.learning_rate * db
+                
+            # Doing some printing and tracking off cost.
+            if i % cost_sample_rate_in_epochs == 0: # i just decided to print every epoch ... so it doesn't really make sense to have in if-statement, but just in-case
+                Z, _ = self.forward_propagation(X) 
+                A = sigmoid(Z)
+                cost = self._binary_cross_entropy(Y, A)
+                costs.append(cost)
+                print(f"Epoch {i}, Cost: {cost}")
+
+                Z, _ = self.forward_propagation(self._x_val)
+                A = sigmoid(Z)
+                test_cost = self._binary_cross_entropy(self._y_val, A)
+                print(f".          Test Cost: {test_cost}")
+
+            if len(test_costs) == 0 or test_cost < min(test_costs):
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience: # give up if no improvement 
+                    break
+            
+            test_costs.append(test_cost)
+
+        return costs, test_costs, cost_sample_rate_in_epochs
+
+    def _binary_cross_entropy(self, Y, A):
+        # Y: (1, N)
+        # A: (1, N)
+        epsilon = 1e-9
+        return -np.mean(Y * np.log(A + epsilon) + (1 - Y) * np.log(1 - A + epsilon))
+    
+    def train(self, X, y):
+        # X: (N, D), y: (N,) 
+        
+        # NaNs ..
+        col_means = np.nanmean(X, axis=0)
+        nan_mask = np.isnan(X)
+        X = X.copy()
+        for j in range(X.shape[1]):
+            X[nan_mask[:, j], j] = col_means[j]
+        
+        # Standardisation
+        self._mean = X.mean(axis=0)
+        self._std = X.std(axis=0)
+        self._std[self._std == 0] = 1
+        X_norm = (X - self._mean) / self._std
+        
+        # Transpose to (D, N) for internal neural net format
+        X_t = X_norm.T
+        Y_t = y.reshape(1, -1)
+        
+        # Create a validation split for early stopping
+        split_idx = int(0.9 * X_t.shape[1])
+        perm = np.random.permutation(X_t.shape[1])
+        X_t, Y_t = X_t[:, perm], Y_t[:, perm]
+        
+        self._x_val = X_t[:, split_idx:]
+        self._y_val = Y_t[:, split_idx:]
+        X_train = X_t[:, :split_idx]
+        Y_train = Y_t[:, :split_idx]
+        
+        # Initialisation if you run without hyperparameters
+        if self.layer_dims is None:
+            D = X_train.shape[0]
+            self.layer_dims = [D, 16, 8, 1]
+            self.L = len(self.layer_dims)
+            self.learning_rate = 0.01
+            self.batch_size = 32
+            self.patience = 5
+            self.reinitialise_params()
+        
+        self._train_internal(X_train, Y_train)
+ 

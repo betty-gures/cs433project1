@@ -1,0 +1,9 @@
+Model: NeuralNet
+
+cv_results repr:
+CVResult(f1_scores=[np.float64(0.3673942935716741), np.float64(0.33694813072087637), np.float64(0.30168968880777824), np.float64(0.35130407124681934), np.float64(0.3763730569948187)], f2_scores=[np.float64(0.5289008759340822), np.float64(0.5174438297391893), np.float64(0.4865226922140131), np.float64(0.5177424647260114), np.float64(0.5427375971309025)], auc_rocs=[np.float64(0.8437658534404696), np.float64(0.8419365065372055), np.float64(0.8086453994244739), np.float64(0.8301220632055892), np.float64(0.8511053684093132)], train_result=None)
+
+Aggregated metrics:
+Average F1-score: 34.7% ± 2.6
+Average F2-score: 51.9% ± 1.9
+Average AUC-ROC: 83.5% ± 1.5

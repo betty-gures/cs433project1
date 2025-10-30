@@ -18,7 +18,7 @@ import os
 import numpy as np
 
 from model_selection import cross_validation
-from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree
+from models import OrdinaryLeastSquares, LogisticRegression, LinearSVM, KNearestNeighbors, DecisionTree, NeuralNet
 from preprocessing import preprocess
 
 # Map short, CLI-friendly names to concrete model classes.
@@ -28,6 +28,7 @@ MODEL_REGISTRY = {
     "linear_svm": LinearSVM,
     "knn": KNearestNeighbors,
     "decision_tree": DecisionTree,
+    "neural_network": NeuralNet,
 }
 
 def parse_args():
