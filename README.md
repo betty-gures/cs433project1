@@ -49,8 +49,8 @@ The project task was to implement and test machine learning methods to predict c
 ```
 
 ## File description
-- `data/metadata/` contains metadata about the dataset (feature names, missing values, variable types, etc.)
-- `data/submissions`  contains all the submissions we made to AICrowd
+- `data/metadata/` contains metadata about the dataset (feature names, missing value codes, and variable types)
+- `data/submissions`  contains the submissions we made to AICrowd for each model
 - `data/dataset.zip` is the dataset provided by AICrowd in .zip format
 - `results/` contains results from the experiments (plots, model performances, etc.)
 - `abl_dataset_size.py` script to run dataset size experiment
