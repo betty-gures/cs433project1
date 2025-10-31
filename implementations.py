@@ -18,6 +18,17 @@ def compute_mse(y, tx, w):
 
 
 def compute_mse_gradient(y, tx, w, stochastic=False):
+    """Compute the gradient of the MSE loss.
+    
+    Args:
+        y: shape=(N, )
+        tx: shape=(N,D)
+        w: shape=(D,). The vector of model parameters.
+        stochastic: boolean, whether to use stochastic gradient (True) or full gradient (False)
+
+    Returns:
+        gradient: numpy array of shape (D,), the gradient of the MSE loss at w
+    """
     if stochastic:
         random_index = np.random.randint(y.shape[0])
         tx = tx[random_index, :].reshape(1, -1)
