@@ -589,31 +589,52 @@ class KNearestNeighbors:
 
 class DecisionTree:
     """
-    Lightweight implementation of a binary decision tree (CART) using Gini impurity.
-    Fully NumPy-based and compatible with the existing project pipeline.
+    A compact implementation of a binary Decision Tree classifier using the CART algorithm.
+    - CART (Classification and Regression Trees) builds the model by repeatedly splitting the data
+      into two groups based on simple threshold rules (e.g., "if age <= 60").
+    - Each split aims to increase the purity of the resulting groups, measured by the Gini impurity.
+    - The algorithm continues until the maximum depth is reached, the node is pure, or there are too few samples.
     """
     def __init__(self, max_depth=6, min_samples_leaf=50, max_features=None, seed=42, squared_features=False):
+        """
+        Initialize the tree parameters.
+        Args:
+            max_depth: Maximum depth of the tree (controls model complexity).
+            min_samples_leaf: Minimum number of samples required in a leaf node.
+            max_features: If set, only a random subset of features is used at each split.
+            seed: Random seed for reproducibility.
+            squared_features: Whether squared features are used in preprocessing (handled externally).
+        """
         self.max_depth = max_depth
         self.min_samples_leaf = min_samples_leaf
         self.max_features = max_features  # if None -> use all features
         self.rng = np.random.default_rng(seed)
         self.squared_features = squared_features
-        self.tree_ = None  # list of nodes
+        self.tree_ = None  # List of nodes, stores the trained tree as nested dictionaries
 
-    # ----- utilities -----
+    # ----- helper methods -----
     @staticmethod
     def _gini(y):
+        """
+        Compute the Gini impurity, a measure of how mixed the classes are within a node.
+        - Gini = 0  → all samples belong to the same class (pure).
+        - Gini = 0.5 → perfectly mixed (50/50 split between classes).
+        """
         if y.size == 0: return 0.0
         p1 = np.mean(y == 1)
-        return 2 * p1 * (1 - p1)  # 1 - (p1^2 + p0^2)
+        return 2 * p1 * (1 - p1)  # Gini impurity formula
 
     @staticmethod
     def _leaf_value(y):
-        # return class-1 probability at leaf
+        """Return the probability of class 1 at a leaf node."""
         return np.mean(y == 1).item() if y.size else 0.0
 
     def _best_split(self, X, y, feat_idxes):
-        # Returns (best_feature, best_threshold, best_gini, left_mask) or (None, None, None, None)
+        """
+        Find the best feature and threshold that produce the largest reduction in Gini impurity.
+        Returns:
+            (best_feature, best_threshold, best_gini, left_mask) or (None, None, None, None)
+        """
         n, d = X.shape
         base_gini = self._gini(y)
         best_gain = 0.0
@@ -621,25 +642,33 @@ class DecisionTree:
 
         for j in feat_idxes:
             col = X[:, j]
-            # candidate thresholds: midpoints between sorted unique values (downsample if many)
+            # Candidate thresholds: midpoints between sorted unique values (downsample if many)
             uniq = np.unique(col)
             if uniq.size < 2: 
-                continue
-            # downsample candidate thresholds for speed
+                continue # Cannot split on constant features
+            
+            # Downsample possible thresholds for efficiency
             if uniq.size > 64:
                 idx = np.linspace(0, uniq.size - 1, 64, dtype=int)
                 uniq = uniq[idx]
             thr_candidates = (uniq[:-1] + uniq[1:]) * 0.5
 
             for thr in thr_candidates:
+                # Split samples into left/right nodes based on threshold
                 left_mask = col <= thr
                 nL = np.sum(left_mask)
                 nR = n - nL
+
+                # Skip splits that produce very small nodes
                 if nL < self.min_samples_leaf or nR < self.min_samples_leaf:
                     continue
+
+                # Compute weighted Gini impurity after the split
                 giniL = self._gini(y[left_mask])
                 giniR = self._gini(y[~left_mask])
                 gini_split = (nL * giniL + nR * giniR) / n
+
+                # Information gain: impurity reduction achieved by this split
                 gain = base_gini - gini_split
                 if gain > best_gain:
                     best_gain = gain
@@ -647,39 +676,48 @@ class DecisionTree:
         return best
 
     def _build(self, X, y, depth):
+        """
+        Recursively construct the decision tree.
+        If stopping criteria are met, create a leaf node; otherwise, create a split node.
+        """
         node = {}
-        # stopping criteria
+        # Stopping criteria, stop if the node is pure, max depth reached, or too few samples
         if (depth >= self.max_depth) or (y.size <= 2 * self.min_samples_leaf) or (np.all(y == y[0])):
             node["type"] = "leaf"
             node["p1"] = self._leaf_value(y)
             return node
-
+        # Randomly select a subset of features if max_features is set
         d = X.shape[1]
         feat_idxes = np.arange(d)
         if self.max_features is not None and self.max_features < d:
             feat_idxes = self.rng.choice(d, size=self.max_features, replace=False)
 
+        # Find the best split
         j, thr, _, left_mask = self._best_split(X, y, feat_idxes)
         if j is None:
             node["type"] = "leaf"
             node["p1"] = self._leaf_value(y)
             return node
-
+        
+        #Store split details and recursively build child nodes
         node["type"] = "split"
-        node["j"] = int(j)
-        node["thr"] = float(thr)
+        node["j"] = int(j) # feature index
+        node["thr"] = float(thr) # threshold value
         node["left"] = self._build(X[left_mask], y[left_mask], depth + 1)
         node["right"] = self._build(X[~left_mask], y[~left_mask], depth + 1)
         return node
 
-    # ----- public API -----
+    # ----- training and prediction -----
     def hyperparameter_tuning(self, X, y, metric=f_score, verbose=False):
-        # simple grid on depth / min_leaf; pick threshold later as usual
+        """
+        Tune the tree’s hyperparameters (max_depth, min_samples_leaf) using a validation split.
+        Also determines the best decision threshold for classifying probabilities into 0/1 labels.
+        """
         X_tr, y_tr, X_val, y_val = test_val_split(self.rng, X, y, val_ratio=0.2)
         self.X = X_tr
         X_tr_p, X_val_p, _ = preprocess_splits(X_tr, X_val, squared_features=self.squared_features)
 
-        grids = []
+        grids = [] # grid search over depth and leaf size combinations
         for md in [3, 4, 5, 6, 8, 10]:
             for ml in [20, 50, 100, 200]:
                 grids.append((md, ml))
@@ -706,23 +744,31 @@ class DecisionTree:
         self.decision_threshold = best_thr
         if verbose:
             print(f"Best: depth={self.max_depth}, min_leaf={self.min_samples_leaf}, thr={self.decision_threshold:.2f}, score={best_score:.4f}")
-        return [], []  # keep API symmetry with others
+        return [], []  # keeps consistent API with other models
 
     def train(self, X, y):
+        """Fit the decision tree on the full training data."""
         validate_data(X, y)
         self.X = X
         Xp, _ = preprocess_splits(X, squared_features=self.squared_features)
         self.tree_ = self._build(Xp, y, depth=0)
 
     def _predict_row(self, x, node):
+        """Traverse the tree for a single sample until a leaf node is reached."""
         while node["type"] != "leaf":
             if x[node["j"]] <= node["thr"]:
                 node = node["left"]
             else:
                 node = node["right"]
-        return node["p1"]  # probability of class 1
+        return node["p1"]  # return the stored probability of class 1
 
     def predict(self, X, scores=False, save_scores=False, use_scores=False):
+        """
+        Generate predictions for a dataset.
+        Args:
+            scores: if True, return probabilities between 0 and 1.
+            Otherwise, convert probabilities to 0/1 predictions using the decision threshold.
+        """
         _, Xp, _ = preprocess_splits(self.X, X, squared_features=self.squared_features)
         probs = np.array([self._predict_row(row, self.tree_) for row in Xp])
         if save_scores: self.scores = probs
